@@ -122,61 +122,104 @@ function extractEmailBody(payload) {
 function checkJobKeywords(subject, body, from) {
   const text = `${subject} ${body} ${from}`.toLowerCase();
   
-  // Strong job-related keywords (high confidence)
-  const strongJobKeywords = [
-    'application', 'apply', 'position', 'job', 'role', 'hiring', 'recruitment',
-    'interview', 'resume', 'cv', 'candidate', 'applicant', 'employment',
-    'thank you for applying', 'application received', 'application status',
-    'we received your application', 'your application has been',
-    'interview scheduled', 'interview invitation', 'job offer',
-    'position available', 'hiring for', 'we are hiring',
-    'application submitted', 'application under review',
-    'next steps', 'follow up', 'application process'
+  // STRICT: Only keywords that indicate actual application process
+  const strictApplicationKeywords = [
+    'thank you for applying',
+    'application received',
+    'application submitted',
+    'we received your application',
+    'your application has been',
+    'application under review',
+    'application status update',
+    'interview scheduled',
+    'interview invitation',
+    'interview confirmation',
+    'next steps in your application',
+    'application process',
+    'follow up on your application',
+    'application update',
+    'your application is being',
+    'application review',
+    'application progress'
   ];
   
-  // Medium job-related keywords (moderate confidence)
-  const mediumJobKeywords = [
-    'career', 'opportunity', 'position', 'team', 'company',
-    'department', 'division', 'office', 'workplace',
-    'employment', 'job opening', 'vacancy', 'posting'
+  // Company-specific job application patterns
+  const applicationPatterns = [
+    /@([^.]+)\.workday\.com/i,  // Workday applications
+    /@([^.]+)\.greenhouse\.io/i, // Greenhouse applications
+    /@([^.]+)\.lever\.co/i,     // Lever applications
+    /@([^.]+)\.bamboohr\.com/i, // BambooHR applications
+    /@([^.]+)\.icims\.com/i,    // iCIMS applications
+    /@([^.]+)\.smartrecruiters\.com/i, // SmartRecruiters
+    /@([^.]+)\.jobvite\.com/i,  // Jobvite applications
+    /@([^.]+)\.myworkdayjobs\.com/i, // Workday jobs
+    /@([^.]+)\.myworkday\.com/i, // Workday
+    /@([^.]+)\.hirevue\.com/i,  // HireVue interviews
+    /@([^.]+)\.modernhire\.com/i, // Modern Hire
+    /@([^.]+)\.interview\.io/i, // Interview.io
+    /@([^.]+)\.pymetrics\.com/i, // Pymetrics
+    /@([^.]+)\.codesignal\.com/i, // CodeSignal
+    /@([^.]+)\.hackerrank\.com/i, // HackerRank
   ];
   
-  // Check for strong keywords first
-  const hasStrongKeywords = strongJobKeywords.some(keyword => text.includes(keyword));
-  if (hasStrongKeywords) {
-    console.log(`   🔍 Found strong job keywords: ${strongJobKeywords.find(keyword => text.includes(keyword))}`);
+  // Check for strict application keywords first
+  const hasStrictKeywords = strictApplicationKeywords.some(keyword => text.includes(keyword));
+  if (hasStrictKeywords) {
+    console.log(`   🔍 Found strict application keywords: ${strictApplicationKeywords.find(keyword => text.includes(keyword))}`);
     return true;
   }
   
-  // Check for medium keywords
-  const hasMediumKeywords = mediumJobKeywords.some(keyword => text.includes(keyword));
-  if (hasMediumKeywords) {
-    console.log(`   🔍 Found medium job keywords: ${mediumJobKeywords.find(keyword => text.includes(keyword))}`);
-    return true;
-  }
-  
-  // Check for company-specific patterns (e.g., noreply@company.com)
-  const companyPatterns = [
-    /@([^.]+)\.com/i,  // company.com
-    /@([^.]+)\.org/i,  // company.org
-    /@([^.]+)\.net/i,  // company.net
-    /@([^.]+)\.io/i,   // company.io
-    /@([^.]+)\.ai/i,   // company.ai
-  ];
-  
-  for (const pattern of companyPatterns) {
+  // Check for application platform patterns
+  for (const pattern of applicationPatterns) {
     const match = from.match(pattern);
     if (match) {
-      const company = match[1].toLowerCase();
-      // Check if it's likely a job-related company email
-      if (company.includes('jobs') || company.includes('careers') || company.includes('hr') || company.includes('recruit')) {
-        console.log(`   🔍 Found job-related company email: ${match[0]}`);
-        return true;
-      }
+      console.log(`   🔍 Found application platform email: ${match[0]}`);
+      return true;
     }
   }
   
-  console.log(`   🔍 No job-related keywords found - skipping AI analysis`);
+  // Check for specific company career emails (only major companies)
+  const careerEmailPatterns = [
+    /@([^.]+)\.careers\.([^.]+)\.com/i,  // company.careers.domain.com
+    /@careers\.([^.]+)\.com/i,           // careers.company.com
+    /@jobs\.([^.]+)\.com/i,              // jobs.company.com
+    /@([^.]+)\.jobs\.com/i,              // company.jobs.com
+    /@([^.]+)\.talent\.([^.]+)\.com/i,   // company.talent.domain.com
+  ];
+  
+  for (const pattern of careerEmailPatterns) {
+    const match = from.match(pattern);
+    if (match) {
+      console.log(`   🔍 Found career email: ${match[0]}`);
+      return true;
+    }
+  }
+  
+  // Check for specific job offer/status keywords
+  const statusKeywords = [
+    'job offer',
+    'offer letter',
+    'offer extended',
+    'offer accepted',
+    'offer declined',
+    'application rejected',
+    'not moving forward',
+    'position filled',
+    'candidate selected',
+    'final round',
+    'onsite interview',
+    'technical interview',
+    'phone screen',
+    'recruiter call'
+  ];
+  
+  const hasStatusKeywords = statusKeywords.some(keyword => text.includes(keyword));
+  if (hasStatusKeywords) {
+    console.log(`   🔍 Found status keywords: ${statusKeywords.find(keyword => text.includes(keyword))}`);
+    return true;
+  }
+  
+  console.log(`   🔍 No strict application keywords found - skipping AI analysis`);
   return false;
 }
 
@@ -276,14 +319,21 @@ async function analyzeEmailWithAI(subject, body, from) {
     const truncatedBody = truncateText(body, 6000); // Leave room for prompt
     
     const prompt = `
-    Analyze this job application email and extract the following information in JSON format:
+    Analyze this email and determine if it's related to a job application that the user has ACTUALLY STARTED. Be very strict - only classify as a job application if the user has submitted an application or is actively in the hiring process.
     
     Email Subject: ${subject}
     From: ${from}
     Email Body: ${truncatedBody}
     
+    IMPORTANT CRITERIA:
+    - Only classify as job application if user has SUBMITTED an application
+    - Skip job postings, newsletters, marketing emails, or general career content
+    - Skip emails about jobs the user hasn't applied to
+    - Skip recruitment emails for positions user didn't apply for
+    - Focus on actual application status updates, interview scheduling, offers, rejections
+    
     Please provide:
-    1. isJobApplication: boolean (true if this is related to a job application)
+    1. isJobApplication: boolean (true ONLY if this is about an application the user submitted)
     2. company: string (extract company name)
     3. position: string (extract job position/title)
     4. status: string (one of: "received", "under_review", "interview_scheduled", "interview_completed", "offer", "rejected", "follow_up_needed", "other")
@@ -303,7 +353,7 @@ async function analyzeEmailWithAI(subject, body, from) {
       messages: [
         {
           role: "system",
-          content: "You are an AI assistant that analyzes job application emails. Always respond with valid JSON only, no markdown formatting or code blocks. Keep responses concise but complete."
+          content: "You are an AI assistant that analyzes job application emails. Be VERY STRICT - only classify emails as job applications if the user has actually submitted an application or is actively in the hiring process. Ignore job postings, newsletters, and marketing emails. Always respond with valid JSON only, no markdown formatting or code blocks. Keep responses concise but complete."
         },
         {
           role: "user",
@@ -358,7 +408,7 @@ async function analyzeAllJobEmails(accessToken) {
     const res = await gmail.users.messages.list({
       userId: "me",
       q: 'newer_than:90d',
-      maxResults: 100,
+      maxResults: 20,
     });
 
     const messages = res.data.messages || [];
@@ -394,9 +444,9 @@ async function analyzeAllJobEmails(accessToken) {
         console.log(`   🤖 Analyzing with AI...`);
         const aiAnalysis = await analyzeEmailWithAI(subject, body, from);
 
-        // Only include emails that are likely job-related
-        if (aiAnalysis.isJobApplication && aiAnalysis.confidence > 0.3) {
-          console.log(`   ✅ Job-related email found: ${aiAnalysis.company} - ${aiAnalysis.position}`);
+        // Only include emails that are likely job-related with high confidence
+        if (aiAnalysis.isJobApplication && aiAnalysis.confidence > 0.7) {
+          console.log(`   ✅ High-confidence job application found: ${aiAnalysis.company} - ${aiAnalysis.position} (confidence: ${aiAnalysis.confidence})`);
           jobEmails.push({
             id: msg.id,
             subject,
@@ -431,4 +481,102 @@ async function analyzeAllJobEmails(accessToken) {
   }
 }
 
-module.exports = { fetchJobEmails, analyzeAllJobEmails };
+// New function for incremental email scraping
+async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
+  try {
+    console.log("🔐 Setting up Gmail authentication for incremental analysis...");
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+
+    console.log("📧 Initializing Gmail API for incremental analysis...");
+    const gmail = google.gmail({ version: "v1", auth });
+
+    // Build query based on date
+    let query = 'newer_than:50d'; // Default to 50 days
+    if (sinceDate) {
+      const daysSince = Math.ceil((Date.now() - new Date(sinceDate).getTime()) / (1000 * 60 * 60 * 24));
+      query = `newer_than:${daysSince}d`;
+      console.log(`📅 Fetching emails since ${sinceDate} (${daysSince} days ago)`);
+    } else {
+      console.log("📅 No last scrape date found, fetching emails from last 50 days");
+    }
+
+    console.log(`🔍 Fetching emails with query: ${query}`);
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      q: query,
+      maxResults: 100,
+    });
+
+    const messages = res.data.messages || [];
+    console.log(`📨 Found ${messages.length} emails to analyze`);
+
+    const jobEmails = [];
+    let aiProcessedCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      console.log(`📝 Analyzing email ${i + 1}/${messages.length} (ID: ${msg.id})...`);
+      
+      const msgRes = await gmail.users.messages.get({ userId: "me", id: msg.id });
+      const headers = msgRes.data.payload.headers;
+      const body = extractEmailBody(msgRes.data.payload);
+
+      const subject = headers.find((h) => h.name === "Subject")?.value;
+      const from = headers.find((h) => h.name === "From")?.value;
+      const date = headers.find((h) => h.name === "Date")?.value;
+
+      console.log(`   Subject: ${subject}`);
+      console.log(`   From: ${from}`);
+
+      // Pre-filter with keywords before sending to AI
+      const isLikelyJobEmail = checkJobKeywords(subject, body, from);
+      
+      if (isLikelyJobEmail) {
+        console.log(`   ✅ Likely job email - sending to AI for analysis`);
+        aiProcessedCount++;
+        
+        // Analyze with AI
+        console.log(`   🤖 Analyzing with AI...`);
+        const aiAnalysis = await analyzeEmailWithAI(subject, body, from);
+
+        // Only include emails that are likely job-related with high confidence
+        if (aiAnalysis.isJobApplication && aiAnalysis.confidence > 0.7) {
+          console.log(`   ✅ High-confidence job application found: ${aiAnalysis.company} - ${aiAnalysis.position} (confidence: ${aiAnalysis.confidence})`);
+          jobEmails.push({
+            gmailId: msg.id, // Use Gmail ID as document key
+            subject,
+            from,
+            date,
+            body: body.substring(0, 300) + "...",
+            aiAnalysis,
+            scrapedAt: new Date().toISOString()
+          });
+        } else {
+          console.log(`   ⏭️ AI determined not job-related or low confidence (${aiAnalysis.confidence})`);
+        }
+      } else {
+        console.log(`   ⏭️ Pre-filtered as non-job email - skipping AI analysis`);
+        skippedCount++;
+      }
+    }
+
+    console.log(`✅ Incremental analysis complete!`);
+    console.log(`   - Total emails processed: ${messages.length}`);
+    console.log(`   - Emails sent to AI: ${aiProcessedCount}`);
+    console.log(`   - Emails skipped (pre-filtered): ${skippedCount}`);
+    console.log(`   - Job-related emails found: ${jobEmails.length}`);
+    console.log(`   - Cost savings: ~${Math.round((skippedCount / messages.length) * 100)}% fewer AI calls`);
+    
+    return jobEmails;
+  } catch (error) {
+    console.error("❌ Error in incremental email analysis:", error);
+    if (error.message.includes("insufficient authentication scopes")) {
+      throw new Error("Gmail access not properly authorized. Please re-authenticate with Google.");
+    }
+    throw error;
+  }
+}
+
+module.exports = { fetchJobEmails, analyzeAllJobEmails, fetchIncrementalJobEmails };

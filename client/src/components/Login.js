@@ -27,7 +27,7 @@ const Login = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        backgroundColor: '#000000',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -40,30 +40,36 @@ const Login = () => {
           sx={{
             borderRadius: 3,
             overflow: 'hidden',
+            backgroundColor: '#111111',
+            border: '1px solid #333333',
           }}
         >
           <Box
             sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundColor: '#000000',
               color: 'white',
               padding: 4,
               textAlign: 'center',
+              borderBottom: '1px solid #333333',
             }}
           >
             <Typography variant="h3" component="h1" gutterBottom>
-              Job Application Email Analyzer
+              JobCAT
             </Typography>
             <Typography variant="h6" sx={{ opacity: 0.9 }}>
-              AI-powered analysis of your job application emails
+              Job Collector and Tracker
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 2, opacity: 0.8 }}>
+              AI-powered job application tracking
             </Typography>
           </Box>
 
-          <CardContent sx={{ padding: 4 }}>
+          <CardContent sx={{ padding: 4, backgroundColor: '#111111' }}>
             <Typography variant="h5" component="h2" gutterBottom align="center">
               Get Started
             </Typography>
             <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
-              Login with your Google account to analyze your job application emails and track your application status.
+              Login with your Google account to track your job applications and get intelligent insights.
             </Typography>
 
             <Button
@@ -75,9 +81,9 @@ const Login = () => {
               sx={{
                 py: 1.5,
                 fontSize: '1.1rem',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                backgroundColor: '#91973d',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                  backgroundColor: '#7a7f35',
                 },
               }}
             >
@@ -100,6 +106,9 @@ const Login = () => {
                 </Typography>
                 <Typography component="li" variant="body2" color="text.secondary">
                   Comprehensive dashboard with analytics
+                </Typography>
+                <Typography component="li" variant="body2" color="text.secondary">
+                  Incremental updates to save processing time
                 </Typography>
               </Box>
             </Box>

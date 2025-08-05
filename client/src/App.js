@@ -10,17 +10,47 @@ import ProtectedRoute from './components/ProtectedRoute';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#667eea',
+      main: '#91973d', // JobCAT green
     },
     secondary: {
-      main: '#764ba2',
+      main: '#000000', // Black
     },
     background: {
-      default: '#f5f5f5',
+      default: '#000000', // Black background
+      paper: '#111111', // Slightly lighter black for cards
     },
+    text: {
+      primary: '#ffffff', // White text
+      secondary: '#cccccc', // Light gray text
+    },
+    divider: '#333333', // Dark gray dividers
   },
   typography: {
     fontFamily: '"Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontWeight: 700,
+      color: '#ffffff',
+    },
+    h2: {
+      fontWeight: 600,
+      color: '#ffffff',
+    },
+    h3: {
+      fontWeight: 600,
+      color: '#ffffff',
+    },
+    h4: {
+      fontWeight: 600,
+      color: '#ffffff',
+    },
+    h5: {
+      fontWeight: 600,
+      color: '#ffffff',
+    },
+    h6: {
+      fontWeight: 600,
+      color: '#ffffff',
+    },
   },
   components: {
     MuiButton: {
@@ -36,7 +66,33 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          backgroundColor: '#111111',
+          border: '1px solid #333333',
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#000000',
+          borderBottom: '1px solid #333333',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#111111',
+          border: '1px solid #333333',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#222222',
+          color: '#ffffff',
+          border: '1px solid #444444',
         },
       },
     },

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import CompanyView from './CompanyView';
 import {
   Box,
   Container,
@@ -8,144 +10,185 @@ import {
   Card,
   CardContent,
   Button,
-  CircularProgress,
-  Alert,
-  Chip,
-  Paper,
   AppBar,
   Toolbar,
   IconButton,
-  Divider,
+  Alert,
   LinearProgress,
+  Paper,
+  Chip,
 } from '@mui/material';
 import {
+  Update as UpdateIcon,
   Refresh as RefreshIcon,
   Logout as LogoutIcon,
   Email as EmailIcon,
   Business as BusinessIcon,
   PriorityHigh as PriorityIcon,
   TrendingUp as TrendingIcon,
-  Warning as WarningIcon,
-  Search as SearchIcon,
-  Psychology as PsychologyIcon,
+  Sync as SyncIcon,
   CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon,
+  HourglassEmpty as HourglassIcon,
 } from '@mui/icons-material';
-import EmailCard from './EmailCard';
 import StatsCard from './StatsCard';
+import EmailCard from './EmailCard';
 import StatusChart from './StatusChart';
 
 const Dashboard = () => {
-  const { user, logout, getJobSummary } = useAuth();
-  const [summary, setSummary] = useState(null);
-  const [emails, setEmails] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [loadingStep, setLoadingStep] = useState('initializing');
+  const { 
+    isAuthenticated, 
+    loading, 
+    user, 
+    applications, 
+    summary, 
+    error, 
+    logout, 
+    updateJobEmails, 
+    updateApplicationStatus,
+    loadApplications, 
+    loadJobSummary 
+  } = useAuth();
+  
+  const [updating, setUpdating] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
   const [progress, setProgress] = useState(0);
+  const [activeFilter, setActiveFilter] = useState('all'); // New filter state
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setProgress(0);
-      setLoadingStep('connecting');
-      
-      console.log('🔄 Starting data load process...');
-      
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 15;
-        });
-      }, 500);
+  useEffect(() => {
+    // Don't automatically load data on mount
+    // User should click "Sync" to load their data
+  }, []);
 
-      console.log('📡 Making API request to /api/job-summary...');
-      setLoadingStep('fetching');
-      const data = await getJobSummary();
-      
-      console.log('✅ API response received:', data);
-      
-      clearInterval(progressInterval);
-      setProgress(100);
-      setLoadingStep('complete');
-      
-      console.log('📊 Processing summary data...');
-      
-      // Small delay to show completion
-      setTimeout(() => {
-        setSummary(data.summary);
-        setEmails(data.recentEmails);
-        setLoading(false);
-        console.log('🎉 Dashboard loaded successfully!');
-      }, 500);
-      
-    } catch (err) {
-      console.error('❌ Error loading data:', err);
-      if (err.response?.data?.code === 'GMAIL_AUTH_ERROR') {
-        setError('Gmail access not properly authorized. Please re-authenticate with Google.');
-      } else {
-        setError(err.message || 'Failed to load data');
-      }
-      setLoading(false);
+  // Filter applications based on active filter
+  const getFilteredApplications = () => {
+    if (!applications || applications.length === 0) return [];
+    
+    switch (activeFilter) {
+      case 'all':
+        return applications;
+      case 'urgent':
+        return applications.filter(app => app.urgency === 'high' || (app.aiAnalysis && app.aiAnalysis.urgency === 'high'));
+      case 'positive':
+        return applications.filter(app => app.sentiment === 'positive' || (app.aiAnalysis && app.aiAnalysis.sentiment === 'positive'));
+      case 'under_review':
+        return applications.filter(app => app.status === 'under_review' || (app.aiAnalysis && app.aiAnalysis.status === 'under_review'));
+      case 'interview_scheduled':
+        return applications.filter(app => app.status === 'interview_scheduled' || (app.aiAnalysis && app.aiAnalysis.status === 'interview_scheduled'));
+      case 'follow_up_needed':
+        return applications.filter(app => app.status === 'follow_up_needed' || (app.aiAnalysis && app.aiAnalysis.status === 'follow_up_needed'));
+      case 'received':
+        return applications.filter(app => app.status === 'received' || (app.aiAnalysis && app.aiAnalysis.status === 'received'));
+      case 'interview_completed':
+        return applications.filter(app => app.status === 'interview_completed' || (app.aiAnalysis && app.aiAnalysis.status === 'interview_completed'));
+      case 'offer':
+        return applications.filter(app => app.status === 'offer' || (app.aiAnalysis && app.aiAnalysis.status === 'offer'));
+      case 'rejected':
+        return applications.filter(app => app.status === 'rejected' || (app.aiAnalysis && app.aiAnalysis.status === 'rejected'));
+      default:
+        return applications;
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const filteredApplications = getFilteredApplications();
 
-  const handleLogout = () => {
-    logout();
+  const getFilterTitle = () => {
+    const filterTitles = {
+      'all': 'All Job Applications',
+      'companies': 'Applications by Company',
+      'urgent': 'Urgent Applications',
+      'positive': 'Positive Updates',
+      'under_review': 'Under Review',
+      'interview_scheduled': 'Interview Scheduled',
+      'follow_up_needed': 'Follow Up Needed',
+      'received': 'Recently Received',
+      'interview_completed': 'Interview Completed',
+      'offer': 'Job Offers',
+      'rejected': 'Rejected Applications'
+    };
+    return filterTitles[activeFilter] || 'Job Applications';
+  };
+
+  const getLoadingIcon = () => {
+    switch (loadingStep) {
+      case 'analyzing':
+        return <SyncIcon sx={{ fontSize: 40, color: '#91973d' }} />;
+      case 'processing':
+        return <HourglassIcon sx={{ fontSize: 40, color: '#91973d' }} />;
+      case 'updating':
+        return <UpdateIcon sx={{ fontSize: 40, color: '#91973d' }} />;
+      case 'complete':
+        return <CheckCircleIcon sx={{ fontSize: 40, color: '#91973d' }} />;
+      default:
+        return <EmailIcon sx={{ fontSize: 40, color: '#91973d' }} />;
+    }
+  };
+
+  const getLoadingMessage = () => {
+    switch (loadingStep) {
+      case 'analyzing':
+        return 'Analyzing emails with AI...';
+      case 'processing':
+        return 'Processing applications...';
+      case 'updating':
+        return 'Syncing with Gmail...';
+      case 'complete':
+        return 'Update complete!';
+      default:
+        return 'Connecting to Gmail...';
+    }
+  };
+
+  const handleUpdate = async () => {
+    try {
+      console.log("🔄 Starting incremental update...");
+      setUpdating(true);
+      // setError(null); // This line was removed from the new_code, so it's removed here.
+      
+      // Simulate progress updates
+      setLoadingStep('updating');
+      setProgress(20);
+      
+      setTimeout(() => {
+        setLoadingStep('analyzing');
+        setProgress(50);
+      }, 1000);
+      
+      setTimeout(() => {
+        setLoadingStep('processing');
+        setProgress(80);
+      }, 2000);
+      
+      const result = await updateJobEmails();
+      
+      setLoadingStep('complete');
+      setProgress(100);
+      
+      setTimeout(() => {
+        setUpdating(false);
+        setLoadingStep('');
+        setProgress(0);
+      }, 1500);
+      
+      console.log("✅ Update completed successfully:", result);
+    } catch (error) {
+      console.error("❌ Update failed:", error);
+      setUpdating(false);
+      setLoadingStep('');
+      setProgress(0);
+    }
   };
 
   const handleReauthenticate = () => {
     window.location.href = 'http://localhost:3000/api/auth/google';
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      received: 'primary',
-      under_review: 'warning',
-      interview_scheduled: 'success',
-      interview_completed: 'info',
-      offer: 'success',
-      rejected: 'error',
-      follow_up_needed: 'warning',
-      other: 'default',
-    };
-    return colors[status] || 'default';
+  const handleLogout = () => {
+    logout();
   };
 
-  const getLoadingMessage = () => {
-    const messages = {
-      initializing: 'Initializing email analyzer...',
-      connecting: 'Connecting to Gmail...',
-      fetching: 'Fetching your emails...',
-      analyzing: 'Analyzing job application emails with AI...',
-      processing: 'Processing email content...',
-      complete: 'Analysis complete!'
-    };
-    return messages[loadingStep] || 'Processing...';
-  };
-
-  const getLoadingIcon = () => {
-    switch (loadingStep) {
-      case 'initializing':
-        return <CircularProgress size={24} />;
-      case 'connecting':
-        return <EmailIcon sx={{ fontSize: 24 }} />;
-      case 'fetching':
-        return <SearchIcon sx={{ fontSize: 24 }} />;
-      case 'analyzing':
-        return <PsychologyIcon sx={{ fontSize: 24 }} />;
-      case 'processing':
-        return <CircularProgress size={24} />;
-      case 'complete':
-        return <CheckCircleIcon sx={{ fontSize: 24, color: 'success.main' }} />;
-      default:
-        return <CircularProgress size={24} />;
-    }
+  const loadData = () => {
+    loadJobSummary();
   };
 
   if (loading) {
@@ -153,7 +196,7 @@ const Dashboard = () => {
       <Box
         sx={{
           minHeight: '100vh',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          backgroundColor: '#000000',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -166,26 +209,103 @@ const Dashboard = () => {
             sx={{
               borderRadius: 3,
               overflow: 'hidden',
-              background: 'white',
+              backgroundColor: '#111111',
+              border: '1px solid #333333',
             }}
           >
             <Box
               sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                backgroundColor: '#000000',
                 color: 'white',
                 padding: 4,
                 textAlign: 'center',
+                borderBottom: '1px solid #333333',
               }}
             >
               <Typography variant="h4" component="h1" gutterBottom>
-                Job Application Email Analyzer
+                JobCAT
               </Typography>
               <Typography variant="h6" sx={{ opacity: 0.9 }}>
-                AI-powered analysis of your job application emails
+                Job Collector and Tracker
               </Typography>
             </Box>
 
-            <Box sx={{ p: 4 }}>
+            <Box sx={{ p: 4, backgroundColor: '#111111' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
+                <SyncIcon sx={{ fontSize: 40, color: '#91973d' }} />
+                <Typography variant="h6" sx={{ ml: 2 }}>
+                  Loading...
+                </Typography>
+              </Box>
+
+              <LinearProgress 
+                variant="indeterminate"
+                sx={{ 
+                  height: 8, 
+                  borderRadius: 4,
+                  mb: 2,
+                  backgroundColor: '#333333',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                    backgroundColor: '#91973d',
+                  }
+                }} 
+              />
+
+              <Typography variant="body2" color="text.secondary" align="center">
+                Checking authentication and loading your data...
+              </Typography>
+            </Box>
+          </Paper>
+        </Container>
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (updating) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          backgroundColor: '#000000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 2,
+        }}
+      >
+        <Container maxWidth="sm">
+          <Paper
+            elevation={8}
+            sx={{
+              borderRadius: 3,
+              overflow: 'hidden',
+              backgroundColor: '#111111',
+              border: '1px solid #333333',
+            }}
+          >
+            <Box
+              sx={{
+                backgroundColor: '#000000',
+                color: 'white',
+                padding: 4,
+                textAlign: 'center',
+                borderBottom: '1px solid #333333',
+              }}
+            >
+              <Typography variant="h4" component="h1" gutterBottom>
+                JobCAT
+              </Typography>
+              <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                Job Collector and Tracker
+              </Typography>
+            </Box>
+
+            <Box sx={{ p: 4, backgroundColor: '#111111' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
                 {getLoadingIcon()}
                 <Typography variant="h6" sx={{ ml: 2 }}>
@@ -200,8 +320,10 @@ const Dashboard = () => {
                   height: 8, 
                   borderRadius: 4,
                   mb: 2,
+                  backgroundColor: '#333333',
                   '& .MuiLinearProgress-bar': {
                     borderRadius: 4,
+                    backgroundColor: '#91973d',
                   }
                 }} 
               />
@@ -209,8 +331,9 @@ const Dashboard = () => {
               <Typography variant="body2" color="text.secondary" align="center">
                 {loadingStep === 'analyzing' && 'Using AI to classify emails and extract key information...'}
                 {loadingStep === 'processing' && 'Extracting company names, positions, and status updates...'}
+                {loadingStep === 'updating' && 'Checking for new emails and updating your applications...'}
                 {loadingStep === 'complete' && 'Preparing your dashboard...'}
-                {!['analyzing', 'processing', 'complete'].includes(loadingStep) && 'Please wait while we process your emails...'}
+                {!['analyzing', 'processing', 'updating', 'complete'].includes(loadingStep) && 'Please wait while we process your emails...'}
               </Typography>
 
               {loadingStep === 'analyzing' && (
@@ -228,12 +351,21 @@ const Dashboard = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+    <Box sx={{ minHeight: '100vh', backgroundColor: '#000000' }}>
       <AppBar position="static" elevation={0}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Job Application Email Analyzer
+            JobCAT
           </Typography>
+          <Button
+            color="inherit"
+            startIcon={<UpdateIcon />}
+            onClick={handleUpdate}
+            disabled={updating}
+            sx={{ mr: 2 }}
+          >
+            {updating ? 'Updating...' : 'Sync'}
+          </Button>
           <Button
             color="inherit"
             startIcon={<RefreshIcon />}
@@ -279,6 +411,8 @@ const Dashboard = () => {
                   value={summary.totalApplications}
                   icon={<EmailIcon />}
                   color="primary"
+                  onClick={() => setActiveFilter('companies')}
+                  active={activeFilter === 'companies'}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
@@ -295,6 +429,8 @@ const Dashboard = () => {
                   value={summary.urgentEmails.length}
                   icon={<PriorityIcon />}
                   color="error"
+                  onClick={() => setActiveFilter('urgent')}
+                  active={activeFilter === 'urgent'}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
@@ -303,6 +439,8 @@ const Dashboard = () => {
                   value={summary.positiveUpdates.length}
                   icon={<TrendingIcon />}
                   color="success"
+                  onClick={() => setActiveFilter('positive')}
+                  active={activeFilter === 'positive'}
                 />
               </Grid>
             </Grid>
@@ -312,7 +450,7 @@ const Dashboard = () => {
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardContent>
-                    <Typography variant="h6" gutterBottom>
+                    <Typography variant="h6" gutterBottom sx={{ color: '#ffffff' }}>
                       Application Status Breakdown
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
@@ -321,7 +459,17 @@ const Dashboard = () => {
                           key={status}
                           label={`${status.replace('_', ' ')}: ${count}`}
                           color={getStatusColor(status)}
-                          variant="outlined"
+                          variant={activeFilter === status ? "filled" : "outlined"}
+                          onClick={() => setActiveFilter(status)}
+                          sx={{
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: activeFilter === status ? 'inherit' : 'rgba(145, 151, 61, 0.1)',
+                            },
+                            backgroundColor: activeFilter === status ? '#91973d' : 'transparent',
+                            color: activeFilter === status ? '#000000' : '#ffffff',
+                            borderColor: activeFilter === status ? '#91973d' : '#666666',
+                          }}
                         />
                       ))}
                     </Box>
@@ -333,33 +481,104 @@ const Dashboard = () => {
               </Grid>
             </Grid>
 
-            {/* Recent Emails */}
-            <Typography variant="h5" gutterBottom>
-              Recent Job Application Emails
-            </Typography>
-            {emails.length === 0 ? (
-              <Paper sx={{ p: 3, textAlign: 'center' }}>
+            {/* Filtered Applications */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+              <Typography variant="h5" gutterBottom sx={{ color: '#ffffff', mb: 0 }}>
+                {getFilterTitle()}
+              </Typography>
+              {activeFilter !== 'all' && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setActiveFilter('all')}
+                  sx={{
+                    borderColor: '#91973d',
+                    color: '#91973d',
+                    '&:hover': {
+                      borderColor: '#7a7f35',
+                      backgroundColor: 'rgba(145, 151, 61, 0.1)',
+                    },
+                  }}
+                >
+                  Show All
+                </Button>
+              )}
+            </Box>
+            
+            {activeFilter === 'companies' ? (
+              <CompanyView 
+                applications={applications} 
+                onStatusUpdate={updateApplicationStatus}
+              />
+            ) : filteredApplications.length === 0 ? (
+              <Paper sx={{ p: 3, textAlign: 'center', backgroundColor: '#111111', border: '1px solid #333333' }}>
                 <Typography variant="h6" color="text.secondary">
-                  No job application emails found
+                  {activeFilter === 'all' ? 'No job applications found' : `No applications found for "${getFilterTitle()}"`}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Try refreshing or check back later.
+                  {activeFilter === 'all' ? 'Try syncing to check for new applications.' : 'Try selecting a different filter or sync for new applications.'}
                 </Typography>
               </Paper>
             ) : (
               <Grid container spacing={3}>
-                {emails.map((email) => (
-                  <Grid item xs={12} key={email.id}>
-                    <EmailCard email={email} />
-                  </Grid>
-                ))}
+                                  {filteredApplications.map((application) => (
+                    <Grid item xs={12} key={application.id}>
+                      <EmailCard 
+                        email={application} 
+                        onStatusUpdate={updateApplicationStatus}
+                      />
+                    </Grid>
+                  ))}
               </Grid>
             )}
           </>
         )}
+
+        {!summary && (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Typography variant="h4" gutterBottom sx={{ color: '#91973d' }}>
+              Welcome to JobCAT
+            </Typography>
+            <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
+              Job Collector and Tracker
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+              Ready to track your job applications? Click "Sync" to connect with your Gmail and start analyzing your job-related emails.
+            </Typography>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<UpdateIcon />}
+              onClick={handleUpdate}
+              sx={{
+                backgroundColor: '#91973d',
+                '&:hover': {
+                  backgroundColor: '#7a7f35',
+                },
+              }}
+            >
+              Start Syncing
+            </Button>
+          </Box>
+        )}
       </Container>
     </Box>
   );
+};
+
+// Helper function for status colors
+const getStatusColor = (status) => {
+  const colors = {
+    received: 'primary',
+    under_review: 'warning',
+    interview_scheduled: 'success',
+    interview_completed: 'info',
+    offer: 'success',
+    rejected: 'error',
+    follow_up_needed: 'warning',
+    other: 'default',
+  };
+  return colors[status] || 'default';
 };
 
 export default Dashboard; 

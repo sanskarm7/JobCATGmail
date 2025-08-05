@@ -25,17 +25,18 @@
   },
   "homepage": "https://github.com/sanskarm7/JobCATGmailScraper#readme",
   "dependencies": {
+    "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "firebase-admin": "^13.4.0",
     "googleapis": "^154.1.0",
     "openai": "^4.28.0",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0",
-    "cors": "^2.8.5"
+    "passport-google-oauth20": "^2.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2"
   }
 }
