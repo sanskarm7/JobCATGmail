@@ -1,5 +1,5 @@
 
-# JobCAT - Job Collector and Tracker
+# JobCAT - Your Email Companion for Job Applications
 
 JobCAT automatically analyzes your Gmail inbox to track job application statuses using AI. The application identifies job-related emails, extracts application status updates, and presents them in an organized dashboard for efficient job search management.
 
