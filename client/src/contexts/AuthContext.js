@@ -39,7 +39,16 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data.user);
         console.log("✅ User authenticated:", response.data.user);
         
-        // Don't automatically load applications - let user click "Sync" to load data
+        // Automatically load existing applications and summary from Firebase
+        try {
+          console.log("📊 Auto-loading existing data for authenticated user...");
+          await loadApplications(); // Load all applications first
+          await loadJobSummary(); // Then load summary
+          console.log("✅ Auto-load completed");
+        } catch (error) {
+          console.log("📋 No existing data found or error loading - user will need to sync");
+          // Don't set error here as it's expected for new users
+        }
       } else {
         console.log("❌ User not authenticated");
         setIsAuthenticated(false);
@@ -82,7 +91,8 @@ export const AuthProvider = ({ children }) => {
       
       if (response.data.success) {
         setSummary(response.data.summary);
-        setApplications(response.data.recentEmails || []);
+        // Don't overwrite applications - they're already loaded from loadApplications()
+        // setApplications(response.data.recentEmails || []);
         console.log("📊 Summary loaded from database");
       }
     } catch (error) {

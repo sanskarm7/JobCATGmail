@@ -340,6 +340,15 @@ async function mergeApplications(userId, applicationIds, primaryApplicationId) {
     let primaryApp = applicationsToMerge.find(app => app.id === primaryApplicationId) || applicationsToMerge[0];
     const otherApps = applicationsToMerge.filter(app => app.id !== primaryApp.id);
     
+    console.log(`📋 Primary application selected: ${primaryApp.id}`);
+    console.log(`📋 Primary app details:`, {
+      status: primaryApp.status || primaryApp.aiAnalysis?.status,
+      company: primaryApp.company || primaryApp.aiAnalysis?.company,
+      position: primaryApp.position || primaryApp.aiAnalysis?.position,
+      hasAiAnalysis: !!primaryApp.aiAnalysis
+    });
+    console.log(`📋 Other applications being merged: ${otherApps.map(app => `${app.id} (${app.status || app.aiAnalysis?.status})`).join(', ')}`);
+    
     // Sort all applications by date to determine latest updates
     const allAppsSorted = applicationsToMerge.sort((a, b) => {
       const dateA = new Date(a.lastEmailDate || a.date || a.scrapedAt || 0);
@@ -349,14 +358,28 @@ async function mergeApplications(userId, applicationIds, primaryApplicationId) {
     
     const latestApp = allAppsSorted[0];
     
-    // Create merged application data
+    // Ensure we have all required fields from primary app or latest app
+    const getFieldValue = (field) => {
+      return primaryApp[field] || 
+             primaryApp.aiAnalysis?.[field] || 
+             latestApp[field] || 
+             latestApp.aiAnalysis?.[field] || 
+             null;
+    };
+
+    // Create merged application data with comprehensive field mapping
     const mergedApp = {
       ...primaryApp,
-      // Use latest status if not manually updated
-      status: primaryApp.manuallyUpdated ? primaryApp.status : latestApp.status,
-      sentiment: latestApp.sentiment || primaryApp.sentiment,
-      urgency: latestApp.urgency || primaryApp.urgency,
-      nextAction: latestApp.nextAction || primaryApp.nextAction,
+      // Always preserve the primary app's status since user selected it as primary
+      status: primaryApp.status || primaryApp.aiAnalysis?.status,
+      company: getFieldValue('company'),
+      position: getFieldValue('position'),
+      sentiment: getFieldValue('sentiment'),
+      urgency: getFieldValue('urgency'),
+      nextAction: getFieldValue('nextAction'),
+      confidence: getFieldValue('confidence'),
+      keyDetails: getFieldValue('keyDetails') || "No additional details",
+      importantDates: primaryApp.importantDates || latestApp.importantDates || [],
       lastEmailDate: latestApp.lastEmailDate || latestApp.date,
       lastEmailSubject: latestApp.lastEmailSubject || latestApp.subject,
       lastEmailFrom: latestApp.lastEmailFrom || latestApp.from,
@@ -397,6 +420,18 @@ async function mergeApplications(userId, applicationIds, primaryApplicationId) {
     await batch.commit();
     
     console.log(`✅ Successfully merged ${applicationIds.length} applications into ${primaryApp.id}`);
+    console.log(`📋 Final merged application:`, {
+      id: primaryApp.id,
+      status: mergedApp.status,
+      company: mergedApp.company,
+      position: mergedApp.position,
+      sentiment: mergedApp.sentiment,
+      urgency: mergedApp.urgency,
+      hasAiAnalysis: !!mergedApp.aiAnalysis,
+      hasSubject: !!mergedApp.subject,
+      hasBody: !!mergedApp.body
+    });
+    console.log(`📋 Deleted applications: ${otherApps.map(app => app.id).join(', ')}`);
     
     return {
       success: true,

@@ -58,8 +58,8 @@ const Dashboard = () => {
   const [activeFilter, setActiveFilter] = useState('all'); // New filter state
 
   useEffect(() => {
-    // Don't automatically load data on mount
-    // User should click "Sync" to load their data
+    // Data is now automatically loaded in AuthContext when user is authenticated
+    // This ensures users see their existing applications immediately upon login
   }, []);
 
   // Get the most recent date from an application
@@ -88,6 +88,9 @@ const Dashboard = () => {
     switch (activeFilter) {
       case 'all':
         filtered = applications;
+        break;
+      case 'companies':
+        filtered = applications; // Show all applications grouped by company
         break;
       case 'urgent':
         filtered = applications.filter(app => app.urgency === 'high' || (app.aiAnalysis && app.aiAnalysis.urgency === 'high'));
@@ -125,11 +128,34 @@ const Dashboard = () => {
     }
 
     // Sort by date (newest first)
-    return filtered.sort((a, b) => {
-      const dateA = getApplicationDate(a);
-      const dateB = getApplicationDate(b);
-      return dateB - dateA; // Descending order (newest first)
+    const sorted = filtered.sort((a, b) => {
+      try {
+        const dateA = getApplicationDate(a);
+        const dateB = getApplicationDate(b);
+        return dateB - dateA; // Descending order (newest first)
+      } catch (error) {
+        console.error("❌ Error sorting applications:", error, {
+          appA: { id: a?.id, hasDate: !!(a?.date || a?.lastEmailDate) },
+          appB: { id: b?.id, hasDate: !!(b?.date || b?.lastEmailDate) }
+        });
+        return 0; // Keep original order if error
+      }
     });
+    
+    // console.log(`📊 Filtered result: ${sorted.length} applications`);
+    
+    if (sorted.length !== applications.length) {
+      const filtered_ids = sorted.map(app => app.id);
+      const missing = applications.filter(app => !filtered_ids.includes(app.id));
+      console.log(`📋 Missing applications from filter:`, missing.map(app => ({
+        id: app.id,
+        status: app.status || app.aiAnalysis?.status,
+        company: app.company || app.aiAnalysis?.company,
+        hasRequiredFields: !!(app.status || app.aiAnalysis?.status) && !!(app.company || app.aiAnalysis?.company)
+      })));
+    }
+    
+    return sorted;
   };
 
   const filteredApplications = getFilteredApplications();
@@ -552,7 +578,7 @@ const Dashboard = () => {
             
             {activeFilter === 'companies' ? (
               <CompanyView 
-                applications={applications} 
+                applications={filteredApplications} 
                 onStatusUpdate={updateApplicationStatus}
                 onUrgencyUpdate={updateApplicationUrgency}
                 onMergeApplications={mergeApplications}
@@ -563,7 +589,11 @@ const Dashboard = () => {
                   {activeFilter === 'all' ? 'No job applications found' : `No applications found for "${getFilterTitle()}"`}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {activeFilter === 'all' ? 'Try syncing to check for new applications.' : 'Try selecting a different filter or sync for new applications.'}
+                  {activeFilter === 'all' 
+                    ? (applications && applications.length === 0 && !loading 
+                        ? 'Click "Sync with Gmail" to fetch your job application emails.' 
+                        : 'Try syncing to check for new applications.')
+                    : 'Try selecting a different filter or sync for new applications.'}
                 </Typography>
               </Paper>
             ) : (

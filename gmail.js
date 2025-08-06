@@ -18,8 +18,8 @@ async function fetchJobEmails(accessToken) {
     console.log("🔍 Searching for job-related emails...");
     const res = await gmail.users.messages.list({
       userId: "me",
-      q: 'subject:"thank you for applying" OR subject:"application received" OR subject:"application" OR subject:"interview" OR subject:"position" OR subject:"job" newer_than:30d',
-      maxResults: 10,
+      q: 'subject:"thank you for applying" OR subject:"application received" OR subject:"application" OR subject:"interview" OR subject:"position" OR subject:"job" newer_than:50d',
+      maxResults: 10, // Increased from 10 to get more comprehensive results
     });
 
     const messages = res.data.messages || [];
@@ -449,7 +449,7 @@ async function analyzeAllJobEmails(accessToken) {
     const res = await gmail.users.messages.list({
       userId: "me",
       q: 'newer_than:90d',
-      maxResults: 100,
+      maxResults: 20,
     });
 
     const messages = res.data.messages || [];
@@ -532,21 +532,22 @@ async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
     console.log("📧 Initializing Gmail API for incremental analysis...");
     const gmail = google.gmail({ version: "v1", auth });
 
-    // Build query based on date
-    let query = 'newer_than:50d'; // Default to 50 days
+    // Build query based on date and job-related keywords
+    const jobKeywords = 'subject:"thank you for applying" OR subject:"application received" OR subject:"application" OR subject:"interview" OR subject:"position" OR subject:"job"';
+    let query = `(${jobKeywords}) newer_than:50d`; // Default to 50 days
     if (sinceDate) {
       const daysSince = Math.ceil((Date.now() - new Date(sinceDate).getTime()) / (1000 * 60 * 60 * 24));
-      query = `newer_than:${daysSince}d`;
-      console.log(`📅 Fetching emails since ${sinceDate} (${daysSince} days ago)`);
+      query = `(${jobKeywords}) newer_than:${daysSince}d`;
+      console.log(`📅 Fetching job-related emails since ${sinceDate} (${daysSince} days ago)`);
     } else {
-      console.log("📅 No last scrape date found, fetching emails from last 50 days");
+      console.log("📅 No last scrape date found, fetching job-related emails from last 50 days");
     }
 
     console.log(`🔍 Fetching emails with query: ${query}`);
     const res = await gmail.users.messages.list({
       userId: "me",
       q: query,
-      maxResults: 100,
+      maxResults: 500, // Increased from 100 to ensure we don't miss emails
     });
 
     const messages = res.data.messages || [];
