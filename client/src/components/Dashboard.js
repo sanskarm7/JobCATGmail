@@ -47,6 +47,7 @@ const Dashboard = () => {
     updateJobEmails, 
     updateApplicationStatus,
     updateApplicationUrgency,
+    deleteApplication,
     mergeApplications,
     loadApplications, 
     loadJobSummary 
@@ -581,6 +582,7 @@ const Dashboard = () => {
                 applications={filteredApplications} 
                 onStatusUpdate={updateApplicationStatus}
                 onUrgencyUpdate={updateApplicationUrgency}
+                onDeleteApplication={deleteApplication}
                 onMergeApplications={mergeApplications}
               />
             ) : filteredApplications.length === 0 ? (
@@ -604,6 +606,7 @@ const Dashboard = () => {
                         email={application} 
                         onStatusUpdate={updateApplicationStatus}
                         onUrgencyUpdate={updateApplicationUrgency}
+                        onDeleteApplication={deleteApplication}
                       />
                     </Grid>
                   ))}

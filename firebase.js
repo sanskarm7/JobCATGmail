@@ -271,6 +271,28 @@ async function updateApplicationUrgency(userId, applicationId, newUrgency) {
   }
 }
 
+async function deleteApplication(userId, applicationId) {
+  try {
+    console.log(`🗑️ Deleting application ${applicationId} for user: ${userId}`);
+    const applicationRef = db.collection('users').doc(userId).collection('applications').doc(applicationId);
+    
+    // Check if application exists
+    const doc = await applicationRef.get();
+    if (!doc.exists) {
+      throw new Error(`Application ${applicationId} not found`);
+    }
+    
+    // Delete the application document
+    await applicationRef.delete();
+    
+    console.log(`✅ Application ${applicationId} deleted successfully`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error deleting application ${applicationId}:`, error);
+    throw error;
+  }
+}
+
 async function generateSummaryFromDB(userId) {
   try {
     console.log(`📊 Generating summary from database for user: ${userId}`);
@@ -455,6 +477,7 @@ module.exports = {
   storeApplications,
   updateApplicationStatus,
   updateApplicationUrgency,
+  deleteApplication,
   mergeApplications,
   generateSummaryFromDB
 };

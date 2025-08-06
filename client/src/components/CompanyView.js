@@ -33,9 +33,10 @@ import {
   Edit as EditIcon,
   Check as CheckIcon,
   Merge as MergeIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 
-const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onMergeApplications }) => {
+const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onDeleteApplication, onMergeApplications }) => {
   const [editingStatus, setEditingStatus] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -45,6 +46,11 @@ const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onMergeApp
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedPrimary, setSelectedPrimary] = useState('');
   const [merging, setMerging] = useState(false);
+  
+  // Delete state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [applicationToDelete, setApplicationToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const statusOptions = [
     { value: 'received', label: 'Received', color: '#7a7f35' },
@@ -204,12 +210,44 @@ const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onMergeApp
     }
   };
 
+  // Delete handlers
+  const handleDeleteClick = (application) => {
+    setApplicationToDelete(application);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteCancel = () => {
+    if (!deleting) {
+      setDeleteDialogOpen(false);
+      setApplicationToDelete(null);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!onDeleteApplication || !applicationToDelete) return;
+    
+    setDeleting(true);
+    try {
+      await onDeleteApplication(applicationToDelete.id || applicationToDelete.gmailId);
+      setDeleteDialogOpen(false);
+      setApplicationToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete application:', error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getApplicationStatus = (app) => {
     return app.status || app.aiAnalysis?.status || 'other';
   };
 
   const getApplicationPosition = (app) => {
     return app.position || app.aiAnalysis?.position || 'Unknown Position';
+  };
+
+  const getApplicationCompany = (app) => {
+    return app.company || app.aiAnalysis?.company || 'Unknown Company';
   };
 
   const getApplicationSentiment = (app) => {
@@ -455,6 +493,23 @@ const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onMergeApp
                                 }
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Delete Application">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeleteClick(application)}
+                                disabled={deleting}
+                                sx={{
+                                  color: '#950606',
+                                  padding: '2px',
+                                  ml: 0.5,
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(149, 6, 6, 0.1)',
+                                  },
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
 
                           {/* Sentiment and Urgency */}
@@ -573,6 +628,55 @@ const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onMergeApp
             }}
           >
             {merging ? 'Merging...' : 'Merge Applications'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        PaperProps={{
+          sx: {
+            backgroundColor: '#111111',
+            border: '1px solid #333333',
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: '#fff' }}>
+          Delete Application
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: '#ccc' }}>
+            Are you sure you want to delete the application for{' '}
+            <strong>{applicationToDelete ? getApplicationCompany(applicationToDelete) : ''}</strong> -{' '}
+            <strong>{applicationToDelete ? getApplicationPosition(applicationToDelete) : ''}</strong>?
+          </Typography>
+          <Typography sx={{ color: '#ccc', mt: 1 }}>
+            This action cannot be undone and will remove all associated emails and data.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleDeleteCancel} 
+            sx={{ color: '#ccc' }}
+            disabled={deleting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            disabled={deleting}
+            sx={{
+              backgroundColor: '#950606',
+              '&:hover': {
+                backgroundColor: '#b50707',
+              },
+            }}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

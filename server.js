@@ -10,6 +10,7 @@ const {
   storeApplications, 
   updateApplicationStatus,
   updateApplicationUrgency,
+  deleteApplication,
   mergeApplications,
   generateSummaryFromDB 
 } = require("./firebase");
@@ -174,6 +175,35 @@ app.put("/api/applications/:applicationId/urgency", async (req, res) => {
   } catch (error) {
     console.error("❌ Error updating application urgency:", error);
     res.status(500).json({ error: "Failed to update urgency" });
+  }
+});
+
+// Delete application
+app.delete("/api/applications/:applicationId", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    console.log("❌ Unauthenticated request to delete application");
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const { applicationId } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🗑️ Deleting application ${applicationId} for user ${userId}`);
+    await deleteApplication(userId, applicationId);
+    
+    console.log("✅ Application deleted successfully");
+    res.json({
+      success: true,
+      message: "Application deleted successfully"
+    });
+  } catch (error) {
+    console.error("❌ Error deleting application:", error);
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: "Application not found" });
+    } else {
+      res.status(500).json({ error: "Failed to delete application" });
+    }
   }
 });
 

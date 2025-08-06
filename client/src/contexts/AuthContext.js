@@ -213,6 +213,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const deleteApplication = async (applicationId) => {
+    try {
+      console.log(`🗑️ Deleting application ${applicationId}...`);
+      setError(null);
+      
+      const response = await axios.delete(`/api/applications/${applicationId}`);
+      
+      if (response.data.success) {
+        console.log("✅ Application deleted successfully");
+        
+        // Remove application from local state
+        setApplications(prev => prev.filter(app => 
+          app.id !== applicationId && app.gmailId !== applicationId
+        ));
+        
+        // Reload summary to reflect changes
+        await loadJobSummary();
+        
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error deleting application:", error);
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        console.log("🔑 Authentication error detected, checking auth status...");
+        setError("Session expired. Please refresh the page and log in again.");
+        setIsAuthenticated(false);
+        setUser(null);
+      } else if (error.response?.status === 404) {
+        setError("Application not found");
+      } else {
+        setError("Failed to delete application");
+      }
+      throw error;
+    }
+  };
+
   const mergeApplications = async (applicationIds, primaryApplicationId) => {
     try {
       console.log(`🔄 Merging ${applicationIds.length} applications...`);
@@ -312,6 +350,7 @@ export const AuthProvider = ({ children }) => {
     updateJobEmails,
     updateApplicationStatus,
     updateApplicationUrgency,
+    deleteApplication,
     mergeApplications,
     loadApplications,
     loadJobSummary,

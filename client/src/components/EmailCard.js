@@ -13,6 +13,11 @@ import {
   Tooltip,
   Button,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText,
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -24,12 +29,15 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   TaskAlt as TaskAltIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 
-const EmailCard = ({ email, onStatusUpdate, onUrgencyUpdate }) => {
+const EmailCard = ({ email, onStatusUpdate, onUrgencyUpdate, onDeleteApplication }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
   const statusOptions = [
     { value: 'received', label: 'Received', color: '#7a7f35' },
@@ -79,6 +87,29 @@ const EmailCard = ({ email, onStatusUpdate, onUrgencyUpdate }) => {
       setIsUpdating(false);
     }
   };
+
+  const handleDeleteClick = () => {
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteDialog(false);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      if (onDeleteApplication) {
+        await onDeleteApplication(email.id || email.gmailId);
+      }
+      setShowDeleteDialog(false);
+    } catch (error) {
+      console.error('Failed to delete application:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Use the same color scheme as StatusChart for consistency
   const getStatusColor = (status) => {
     const colorMap = {
@@ -279,6 +310,28 @@ const EmailCard = ({ email, onStatusUpdate, onUrgencyUpdate }) => {
                   </IconButton>
                 </Tooltip>
               )}
+              {/* Delete button */}
+              <Tooltip title="Delete Application">
+                <IconButton
+                  size="small"
+                  onClick={handleDeleteClick}
+                  disabled={isDeleting}
+                  sx={{
+                    color: '#950606',
+                    padding: '4px',
+                    ml: 1,
+                    '&:hover': {
+                      backgroundColor: 'rgba(149, 6, 6, 0.1)',
+                      color: '#b50707',
+                    },
+                    '&:disabled': {
+                      opacity: 0.5,
+                    },
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Box>
           </Box>
         </Box>
@@ -398,6 +451,51 @@ const EmailCard = ({ email, onStatusUpdate, onUrgencyUpdate }) => {
           </Grid>
         </Grid>
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={showDeleteDialog}
+        onClose={handleDeleteCancel}
+        PaperProps={{
+          sx: {
+            backgroundColor: '#111111',
+            border: '1px solid #333333',
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: '#fff' }}>
+          Delete Application
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: '#ccc' }}>
+            Are you sure you want to delete this application for <strong>{analysis.company}</strong> - <strong>{analysis.position}</strong>? 
+            This action cannot be undone and will remove all associated emails and data.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleDeleteCancel} 
+            sx={{ color: '#ccc' }}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            disabled={isDeleting}
+            sx={{
+              backgroundColor: '#950606',
+              '&:hover': {
+                backgroundColor: '#b50707',
+              },
+            }}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };
