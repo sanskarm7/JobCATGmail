@@ -140,6 +140,10 @@ async function storeApplications(userId, applications) {
               lastEmailSubject: application.subject,
               lastEmailFrom: application.from,
               lastGmailId: application.gmailId,
+              // Update with latest email content
+              body: application.body,
+              htmlContent: application.htmlContent,
+              preview: application.preview,
               scrapedAt: application.scrapedAt,
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               emailHistory: admin.firestore.FieldValue.arrayUnion({
@@ -147,7 +151,9 @@ async function storeApplications(userId, applications) {
                 subject: application.subject,
                 date: application.date,
                 status: application.aiAnalysis.status,
-                sentiment: application.aiAnalysis.sentiment
+                sentiment: application.aiAnalysis.sentiment,
+                body: application.body,
+                htmlContent: application.htmlContent
               })
             };
             
@@ -168,7 +174,9 @@ async function storeApplications(userId, applications) {
             subject: application.subject,
             from: application.from,
             date: application.date,
-            body: application.body,
+            body: application.body, // Clean text content
+            htmlContent: application.htmlContent, // Original HTML content
+            preview: application.preview, // Short preview text
             company: application.aiAnalysis.company,
             position: application.aiAnalysis.position,
             status: application.aiAnalysis.status,
@@ -283,6 +291,101 @@ async function generateSummaryFromDB(userId) {
   }
 }
 
+// Merge multiple applications into a single consolidated application
+async function mergeApplications(userId, applicationIds, primaryApplicationId) {
+  try {
+    console.log(`🔄 Merging ${applicationIds.length} applications for user: ${userId}`);
+    
+    // Get all applications to merge
+    const applicationsToMerge = [];
+    const batch = db.batch();
+    
+    for (const appId of applicationIds) {
+      const appDoc = await db.collection('users').doc(userId).collection('applications').doc(appId).get();
+      if (appDoc.exists) {
+        applicationsToMerge.push({ id: appId, ...appDoc.data() });
+      }
+    }
+    
+    if (applicationsToMerge.length < 2) {
+      throw new Error('At least 2 applications are required for merging');
+    }
+    
+    // Find the primary application or use the first one
+    let primaryApp = applicationsToMerge.find(app => app.id === primaryApplicationId) || applicationsToMerge[0];
+    const otherApps = applicationsToMerge.filter(app => app.id !== primaryApp.id);
+    
+    // Sort all applications by date to determine latest updates
+    const allAppsSorted = applicationsToMerge.sort((a, b) => {
+      const dateA = new Date(a.lastEmailDate || a.date || a.scrapedAt || 0);
+      const dateB = new Date(b.lastEmailDate || b.date || b.scrapedAt || 0);
+      return dateB - dateA;
+    });
+    
+    const latestApp = allAppsSorted[0];
+    
+    // Create merged application data
+    const mergedApp = {
+      ...primaryApp,
+      // Use latest status if not manually updated
+      status: primaryApp.manuallyUpdated ? primaryApp.status : latestApp.status,
+      sentiment: latestApp.sentiment || primaryApp.sentiment,
+      urgency: latestApp.urgency || primaryApp.urgency,
+      nextAction: latestApp.nextAction || primaryApp.nextAction,
+      lastEmailDate: latestApp.lastEmailDate || latestApp.date,
+      lastEmailSubject: latestApp.lastEmailSubject || latestApp.subject,
+      lastEmailFrom: latestApp.lastEmailFrom || latestApp.from,
+      lastGmailId: latestApp.lastGmailId || latestApp.gmailId,
+      
+      // Combine email history from all applications
+      emailHistory: [
+        ...(primaryApp.emailHistory || []),
+        ...otherApps.flatMap(app => app.emailHistory || [
+          {
+            gmailId: app.gmailId || app.id,
+            subject: app.subject,
+            date: app.date,
+            status: app.status,
+            sentiment: app.sentiment
+          }
+        ])
+      ].sort((a, b) => new Date(a.date) - new Date(b.date)),
+      
+      // Track merge metadata
+      mergedFrom: applicationIds.filter(id => id !== primaryApp.id),
+      mergedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      manuallyMerged: true
+    };
+    
+    // Update the primary application with merged data
+    const primaryAppRef = db.collection('users').doc(userId).collection('applications').doc(primaryApp.id);
+    batch.set(primaryAppRef, mergedApp);
+    
+    // Delete the other applications
+    otherApps.forEach(app => {
+      const appRef = db.collection('users').doc(userId).collection('applications').doc(app.id);
+      batch.delete(appRef);
+    });
+    
+    // Commit all changes
+    await batch.commit();
+    
+    console.log(`✅ Successfully merged ${applicationIds.length} applications into ${primaryApp.id}`);
+    
+    return {
+      success: true,
+      mergedApplicationId: primaryApp.id,
+      deletedApplicationIds: otherApps.map(app => app.id),
+      mergedCount: applicationIds.length
+    };
+    
+  } catch (error) {
+    console.error(`❌ Error merging applications for user ${userId}:`, error);
+    throw error;
+  }
+}
+
 module.exports = {
   db,
   getUserApplications,
@@ -291,5 +394,6 @@ module.exports = {
   storeApplication,
   storeApplications,
   updateApplicationStatus,
+  mergeApplications,
   generateSummaryFromDB
 };

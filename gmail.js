@@ -33,7 +33,7 @@ async function fetchJobEmails(accessToken) {
       
       const msgRes = await gmail.users.messages.get({ userId: "me", id: msg.id });
       const headers = msgRes.data.payload.headers;
-      const body = extractEmailBody(msgRes.data.payload);
+      const emailContent = extractEmailBody(msgRes.data.payload);
 
       const subject = headers.find((h) => h.name === "Subject")?.value;
       const from = headers.find((h) => h.name === "From")?.value;
@@ -43,20 +43,23 @@ async function fetchJobEmails(accessToken) {
       console.log(`   From: ${from}`);
 
       // Pre-filter with keywords before sending to AI
-      const isLikelyJobEmail = checkJobKeywords(subject, body, from);
+      const isLikelyJobEmail = checkJobKeywords(subject, emailContent.plainText, from);
       
       if (isLikelyJobEmail) {
         console.log(`   ✅ Likely job email - sending to AI for analysis`);
-        // Analyze email content with AI
+        // Analyze email content with AI using original content
         console.log(`   🤖 Analyzing with AI...`);
-        const aiAnalysis = await analyzeEmailWithAI(subject, body, from);
+        const aiAnalysis = await analyzeEmailWithAI(subject, emailContent.originalContent, from);
         console.log(`   ✅ Analysis complete: ${aiAnalysis.isJobApplication ? 'Job-related' : 'Not job-related'}`);
         
         detailedMessages.push({ 
+          gmailId: msg.id,
           subject, 
           from, 
           date, 
-          body: body.substring(0, 500) + "...", // Truncate for display
+          body: emailContent.plainText, // Clean text for display
+          htmlContent: emailContent.htmlContent, // Full HTML content
+          preview: emailContent.plainText.substring(0, 150) + (emailContent.plainText.length > 150 ? "..." : ""),
           aiAnalysis 
         });
       } else {
@@ -76,10 +79,13 @@ async function fetchJobEmails(accessToken) {
         };
         
         detailedMessages.push({ 
+          gmailId: msg.id,
           subject, 
           from, 
           date, 
-          body: body.substring(0, 500) + "...", // Truncate for display
+          body: emailContent.plainText, // Clean text for display
+          htmlContent: emailContent.htmlContent, // Full HTML content
+          preview: emailContent.plainText.substring(0, 150) + (emailContent.plainText.length > 150 ? "..." : ""),
           aiAnalysis: basicAnalysis
         });
       }
@@ -96,26 +102,61 @@ async function fetchJobEmails(accessToken) {
   }
 }
 
+// Extract clean text from HTML content
+function extractTextFromHTML(html) {
+  if (!html) return "";
+  
+  // Remove HTML tags and decode HTML entities
+  let text = html
+    .replace(/<style[^>]*>.*?<\/style>/gis, '') // Remove CSS
+    .replace(/<script[^>]*>.*?<\/script>/gis, '') // Remove JavaScript
+    .replace(/<[^>]*>/g, ' ') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim();
+  
+  return text;
+}
+
 function extractEmailBody(payload) {
-  let body = "";
+  let htmlBody = "";
+  let plainBody = "";
   
   if (payload.parts) {
-    // Multipart message
+    // Multipart message - look for both plain and HTML parts
     for (let part of payload.parts) {
-      if (part.mimeType === "text/plain") {
-        body = Buffer.from(part.body.data, 'base64').toString();
-        break;
-      } else if (part.mimeType === "text/html") {
-        // Fallback to HTML if no plain text
-        body = Buffer.from(part.body.data, 'base64').toString();
+      if (part.mimeType === "text/plain" && part.body.data) {
+        plainBody = Buffer.from(part.body.data, 'base64').toString();
+      } else if (part.mimeType === "text/html" && part.body.data) {
+        htmlBody = Buffer.from(part.body.data, 'base64').toString();
       }
     }
   } else if (payload.body.data) {
     // Simple message
-    body = Buffer.from(payload.body.data, 'base64').toString();
+    const content = Buffer.from(payload.body.data, 'base64').toString();
+    if (payload.mimeType === "text/html") {
+      htmlBody = content;
+    } else {
+      plainBody = content;
+    }
   }
   
-  return body;
+  // Prefer plain text, but extract from HTML if plain text isn't available
+  let cleanText = plainBody;
+  if (!cleanText && htmlBody) {
+    cleanText = extractTextFromHTML(htmlBody);
+  }
+  
+  return {
+    plainText: cleanText || plainBody,
+    htmlContent: htmlBody,
+    originalContent: plainBody || htmlBody // For AI analysis (use original)
+  };
 }
 
 // Pre-filter emails using keywords to avoid unnecessary AI calls
@@ -408,7 +449,7 @@ async function analyzeAllJobEmails(accessToken) {
     const res = await gmail.users.messages.list({
       userId: "me",
       q: 'newer_than:90d',
-      maxResults: 20,
+      maxResults: 100,
     });
 
     const messages = res.data.messages || [];
@@ -521,7 +562,7 @@ async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
       
       const msgRes = await gmail.users.messages.get({ userId: "me", id: msg.id });
       const headers = msgRes.data.payload.headers;
-      const body = extractEmailBody(msgRes.data.payload);
+      const emailContent = extractEmailBody(msgRes.data.payload);
 
       const subject = headers.find((h) => h.name === "Subject")?.value;
       const from = headers.find((h) => h.name === "From")?.value;
@@ -531,15 +572,15 @@ async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
       console.log(`   From: ${from}`);
 
       // Pre-filter with keywords before sending to AI
-      const isLikelyJobEmail = checkJobKeywords(subject, body, from);
+      const isLikelyJobEmail = checkJobKeywords(subject, emailContent.plainText, from);
       
       if (isLikelyJobEmail) {
         console.log(`   ✅ Likely job email - sending to AI for analysis`);
         aiProcessedCount++;
         
-        // Analyze with AI
+        // Analyze with AI using original content
         console.log(`   🤖 Analyzing with AI...`);
-        const aiAnalysis = await analyzeEmailWithAI(subject, body, from);
+        const aiAnalysis = await analyzeEmailWithAI(subject, emailContent.originalContent, from);
 
         // Only include emails that are likely job-related with high confidence
         if (aiAnalysis.isJobApplication && aiAnalysis.confidence > 0.7) {
@@ -549,7 +590,9 @@ async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
             subject,
             from,
             date,
-            body: body.substring(0, 300) + "...",
+            body: emailContent.plainText, // Clean text for display
+            htmlContent: emailContent.htmlContent, // Full HTML content
+            preview: emailContent.plainText.substring(0, 150) + (emailContent.plainText.length > 150 ? "..." : ""),
             aiAnalysis,
             scrapedAt: new Date().toISOString()
           });

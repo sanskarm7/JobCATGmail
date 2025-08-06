@@ -13,6 +13,17 @@ import {
   Tooltip,
   Menu,
   MenuItem,
+  Checkbox,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Alert,
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -21,12 +32,19 @@ import {
   ExpandMore as ExpandMoreIcon,
   Edit as EditIcon,
   Check as CheckIcon,
+  Merge as MergeIcon,
 } from '@mui/icons-material';
 
-const CompanyView = ({ applications, onStatusUpdate }) => {
+const CompanyView = ({ applications, onStatusUpdate, onMergeApplications }) => {
   const [editingStatus, setEditingStatus] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Selection and merge state
+  const [selectedApplications, setSelectedApplications] = useState(new Set());
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [selectedPrimary, setSelectedPrimary] = useState('');
+  const [merging, setMerging] = useState(false);
 
   const statusOptions = [
     { value: 'received', label: 'Received', color: '#7a7f35' },
@@ -36,8 +54,27 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
     { value: 'offer', label: 'Offer', color: '#d3af37' },
     { value: 'rejected', label: 'Rejected', color: '#950606' },
     { value: 'follow_up_needed', label: 'Follow Up Needed', color: '#91973d' },
-    { value: 'other', label: 'Other', color: '#666666' },
+    { value: 'withdrawn', label: 'Withdrawn', color: '#666666' },
+    { value: 'other', label: 'Other', color: '#999999' },
   ];
+
+  // Get the most recent date from an application
+  const getApplicationDate = (app) => {
+    // Try different date fields and return the most recent one
+    const dates = [
+      app.lastEmailDate,
+      app.date,
+      app.scrapedAt,
+      app.updatedAt,
+      app.aiAnalysis?.date
+    ].filter(Boolean); // Remove null/undefined values
+    
+    if (dates.length === 0) return new Date(0); // Fallback to epoch for apps with no dates
+    
+    // Convert to Date objects and find the most recent
+    const datObjects = dates.map(d => new Date(d));
+    return new Date(Math.max(...datObjects));
+  };
 
   // Group applications by company
   const companiesByName = applications.reduce((acc, app) => {
@@ -49,8 +86,16 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
     return acc;
   }, {});
 
-  // Sort companies by number of applications (descending)
+  // Sort companies by number of applications (descending) and sort applications within each company by date (newest first)
   const sortedCompanies = Object.entries(companiesByName)
+    .map(([company, apps]) => [
+      company, 
+      apps.sort((a, b) => {
+        const dateA = getApplicationDate(a);
+        const dateB = getApplicationDate(b);
+        return dateB - dateA; // Descending order (newest first)
+      })
+    ])
     .sort(([, a], [, b]) => b.length - a.length);
 
   const getStatusColor = (status) => {
@@ -88,6 +133,75 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
   const handleClose = () => {
     setAnchorEl(null);
     setEditingStatus(null);
+  };
+
+  // Selection handlers
+  const handleSelectApplication = (applicationId) => {
+    setSelectedApplications(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(applicationId)) {
+        newSet.delete(applicationId);
+      } else {
+        newSet.add(applicationId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllInCompany = (companyApplications) => {
+    const companyIds = companyApplications.map(app => app.id || app.gmailId);
+    const allSelected = companyIds.every(id => selectedApplications.has(id));
+    
+    setSelectedApplications(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        // Deselect all in this company
+        companyIds.forEach(id => newSet.delete(id));
+      } else {
+        // Select all in this company
+        companyIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedApplications(new Set());
+  };
+
+  // Merge handlers
+  const handleMergeSelected = () => {
+    if (selectedApplications.size < 2) return;
+    
+    const applicationIds = Array.from(selectedApplications);
+    setSelectedPrimary(applicationIds[0]); // Default to first selected
+    setMergeDialogOpen(true);
+  };
+
+  const handleConfirmMerge = async () => {
+    if (!onMergeApplications || selectedApplications.size < 2) return;
+    
+    setMerging(true);
+    try {
+      const applicationIds = Array.from(selectedApplications);
+      await onMergeApplications(applicationIds, selectedPrimary);
+      
+      // Clear selection and close dialog
+      setSelectedApplications(new Set());
+      setMergeDialogOpen(false);
+      setSelectedPrimary('');
+    } catch (error) {
+      console.error('Failed to merge applications:', error);
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  const handleCloseMergeDialog = () => {
+    if (!merging) {
+      setMergeDialogOpen(false);
+      setSelectedPrimary('');
+    }
   };
 
   const getApplicationStatus = (app) => {
@@ -132,13 +246,54 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
     }
   };
 
+  const selectedAppsData = applications.filter(app => 
+    selectedApplications.has(app.id || app.gmailId)
+  );
+
   return (
     <Box>
-      <Typography variant="h5" gutterBottom sx={{ color: '#ffffff', mb: 3 }}>
-        Applications by Company
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        {selectedApplications.size > 0 && (
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ color: '#91973d' }}>
+              {selectedApplications.size} selected
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={clearSelection}
+              sx={{ 
+                color: '#ffffff',
+                borderColor: '#666666',
+                '&:hover': { borderColor: '#91973d' }
+              }}
+            >
+              Clear
+            </Button>
+            {selectedApplications.size >= 2 && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<MergeIcon />}
+                onClick={handleMergeSelected}
+                sx={{ 
+                  backgroundColor: '#91973d',
+                  '&:hover': { backgroundColor: '#7a7f35' }
+                }}
+              >
+                Merge Selected
+              </Button>
+            )}
+          </Box>
+        )}
+      </Box>
 
-      {sortedCompanies.map(([companyName, companyApplications]) => (
+      {sortedCompanies.map(([companyName, companyApplications]) => {
+        const companyIds = companyApplications.map(app => app.id || app.gmailId);
+        const someSelected = companyIds.some(id => selectedApplications.has(id));
+        const allSelected = companyIds.every(id => selectedApplications.has(id));
+        
+        return (
         <Accordion 
           key={companyName}
           sx={{
@@ -164,6 +319,20 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              {companyApplications.length > 1 && (
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected && !allSelected}
+                  onChange={() => handleSelectAllInCompany(companyApplications)}
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{
+                    color: '#91973d',
+                    '&.Mui-checked': { color: '#91973d' },
+                    '&.MuiCheckbox-indeterminate': { color: '#91973d' },
+                    mr: 1
+                  }}
+                />
+              )}
               <BusinessIcon sx={{ color: '#91973d', mr: 2 }} />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" sx={{ color: '#ffffff' }}>
@@ -212,9 +381,20 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
                   >
                     <CardContent sx={{ py: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                            <WorkIcon sx={{ color: '#91973d', mr: 1, fontSize: '1.2rem' }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          <Checkbox
+                            checked={selectedApplications.has(application.id || application.gmailId)}
+                            onChange={() => handleSelectApplication(application.id || application.gmailId)}
+                            sx={{
+                              color: '#91973d',
+                              '&.Mui-checked': { color: '#91973d' },
+                              mr: 1,
+                              p: 0.5
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <WorkIcon sx={{ color: '#91973d', mr: 1, fontSize: '1.2rem' }} />
                             <Typography variant="h6" sx={{ color: '#ffffff' }}>
                               {getApplicationPosition(application)}
                             </Typography>
@@ -240,6 +420,7 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
                               Next: {application.nextAction}
                             </Typography>
                           )}
+                          </Box>
                         </Box>
 
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
@@ -306,7 +487,95 @@ const CompanyView = ({ applications, onStatusUpdate }) => {
             </Grid>
           </AccordionDetails>
         </Accordion>
-      ))}
+        );
+      })}
+
+      {/* Merge Confirmation Dialog */}
+      <Dialog 
+        open={mergeDialogOpen} 
+        onClose={handleCloseMergeDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#111111',
+            border: '1px solid #333333',
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: '#ffffff', borderBottom: '1px solid #333333' }}>
+          Merge Selected Applications
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {selectedApplications.size >= 2 && (
+            <>
+              <Alert 
+                severity="warning" 
+                sx={{ 
+                  mb: 2,
+                  backgroundColor: '#2a1f00',
+                  border: '1px solid #d3af37',
+                  '& .MuiAlert-icon': { color: '#d3af37' },
+                  '& .MuiAlert-message': { color: '#ffffff' }
+                }}
+              >
+                This will combine {selectedApplications.size} applications into one. This action cannot be undone.
+              </Alert>
+              
+              <Typography variant="body1" sx={{ color: '#ffffff', mb: 2 }}>
+                Select which application should be the primary (keep its basic information):
+              </Typography>
+              
+              <FormControl component="fieldset">
+                <RadioGroup
+                  value={selectedPrimary}
+                  onChange={(e) => setSelectedPrimary(e.target.value)}
+                >
+                  {selectedAppsData.map((app) => (
+                    <FormControlLabel
+                      key={app.id || app.gmailId}
+                      value={app.id || app.gmailId}
+                      control={<Radio sx={{ color: '#91973d', '&.Mui-checked': { color: '#91973d' } }} />}
+                      label={
+                        <Box>
+                          <Typography variant="body1" sx={{ color: '#ffffff' }}>
+                            {getApplicationPosition(app)}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#cccccc' }}>
+                            Applied: {formatDate(app.lastEmailDate || app.date)}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ mb: 1 }}
+                    />
+                  ))}
+                </RadioGroup>
+              </FormControl>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ borderTop: '1px solid #333333', p: 2 }}>
+          <Button 
+            onClick={handleCloseMergeDialog} 
+            disabled={merging}
+            sx={{ color: '#ffffff' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmMerge}
+            disabled={merging || !selectedPrimary}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#91973d',
+              '&:hover': { backgroundColor: '#7a7f35' },
+              '&:disabled': { backgroundColor: '#333333' }
+            }}
+          >
+            {merging ? 'Merging...' : 'Merge Applications'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Status Edit Menu */}
       <Menu

@@ -46,6 +46,7 @@ const Dashboard = () => {
     logout, 
     updateJobEmails, 
     updateApplicationStatus,
+    mergeApplications,
     loadApplications, 
     loadJobSummary 
   } = useAuth();
@@ -60,41 +61,81 @@ const Dashboard = () => {
     // User should click "Sync" to load their data
   }, []);
 
-  // Filter applications based on active filter
+  // Get the most recent date from an application
+  const getApplicationDate = (app) => {
+    // Try different date fields and return the most recent one
+    const dates = [
+      app.lastEmailDate,
+      app.date,
+      app.scrapedAt,
+      app.updatedAt,
+      app.aiAnalysis?.date
+    ].filter(Boolean); // Remove null/undefined values
+    
+    if (dates.length === 0) return new Date(0); // Fallback to epoch for apps with no dates
+    
+    // Convert to Date objects and find the most recent
+    const datObjects = dates.map(d => new Date(d));
+    return new Date(Math.max(...datObjects));
+  };
+
+  // Filter and sort applications based on active filter
   const getFilteredApplications = () => {
     if (!applications || applications.length === 0) return [];
     
+    let filtered;
     switch (activeFilter) {
       case 'all':
-        return applications;
+        filtered = applications;
+        break;
       case 'urgent':
-        return applications.filter(app => app.urgency === 'high' || (app.aiAnalysis && app.aiAnalysis.urgency === 'high'));
+        filtered = applications.filter(app => app.urgency === 'high' || (app.aiAnalysis && app.aiAnalysis.urgency === 'high'));
+        break;
       case 'positive':
-        return applications.filter(app => app.sentiment === 'positive' || (app.aiAnalysis && app.aiAnalysis.sentiment === 'positive'));
+        filtered = applications.filter(app => app.sentiment === 'positive' || (app.aiAnalysis && app.aiAnalysis.sentiment === 'positive'));
+        break;
       case 'under_review':
-        return applications.filter(app => app.status === 'under_review' || (app.aiAnalysis && app.aiAnalysis.status === 'under_review'));
+        filtered = applications.filter(app => app.status === 'under_review' || (app.aiAnalysis && app.aiAnalysis.status === 'under_review'));
+        break;
       case 'interview_scheduled':
-        return applications.filter(app => app.status === 'interview_scheduled' || (app.aiAnalysis && app.aiAnalysis.status === 'interview_scheduled'));
+        filtered = applications.filter(app => app.status === 'interview_scheduled' || (app.aiAnalysis && app.aiAnalysis.status === 'interview_scheduled'));
+        break;
       case 'follow_up_needed':
-        return applications.filter(app => app.status === 'follow_up_needed' || (app.aiAnalysis && app.aiAnalysis.status === 'follow_up_needed'));
+        filtered = applications.filter(app => app.status === 'follow_up_needed' || (app.aiAnalysis && app.aiAnalysis.status === 'follow_up_needed'));
+        break;
       case 'received':
-        return applications.filter(app => app.status === 'received' || (app.aiAnalysis && app.aiAnalysis.status === 'received'));
+        filtered = applications.filter(app => app.status === 'received' || (app.aiAnalysis && app.aiAnalysis.status === 'received'));
+        break;
       case 'interview_completed':
-        return applications.filter(app => app.status === 'interview_completed' || (app.aiAnalysis && app.aiAnalysis.status === 'interview_completed'));
+        filtered = applications.filter(app => app.status === 'interview_completed' || (app.aiAnalysis && app.aiAnalysis.status === 'interview_completed'));
+        break;
       case 'offer':
-        return applications.filter(app => app.status === 'offer' || (app.aiAnalysis && app.aiAnalysis.status === 'offer'));
+        filtered = applications.filter(app => app.status === 'offer' || (app.aiAnalysis && app.aiAnalysis.status === 'offer'));
+        break;
       case 'rejected':
-        return applications.filter(app => app.status === 'rejected' || (app.aiAnalysis && app.aiAnalysis.status === 'rejected'));
+        filtered = applications.filter(app => app.status === 'rejected' || (app.aiAnalysis && app.aiAnalysis.status === 'rejected'));
+        break;
+      case 'withdrawn':
+        filtered = applications.filter(app => app.status === 'withdrawn' || (app.aiAnalysis && app.aiAnalysis.status === 'withdrawn'));
+        break;
       default:
-        return applications;
+        filtered = applications;
+        break;
     }
+
+    // Sort by date (newest first)
+    return filtered.sort((a, b) => {
+      const dateA = getApplicationDate(a);
+      const dateB = getApplicationDate(b);
+      return dateB - dateA; // Descending order (newest first)
+    });
   };
 
   const filteredApplications = getFilteredApplications();
 
   const getFilterTitle = () => {
     const filterTitles = {
-      'all': 'All Job Applications',
+      'all': 'All Job Application Emails',
       'companies': 'Applications by Company',
       'urgent': 'Urgent Applications',
       'positive': 'Positive Updates',
@@ -104,7 +145,8 @@ const Dashboard = () => {
       'received': 'Recently Received',
       'interview_completed': 'Interview Completed',
       'offer': 'Job Offers',
-      'rejected': 'Rejected Applications'
+      'rejected': 'Rejected Applications',
+      'withdrawn': 'Withdrawn Applications'
     };
     return filterTitles[activeFilter] || 'Job Applications';
   };
@@ -386,7 +428,7 @@ const Dashboard = () => {
             severity="error" 
             sx={{ mb: 3 }}
             action={
-              error.includes('Gmail access not properly authorized') ? (
+              error.includes('Gmail access not properly authorized') || error.includes('Session expired') ? (
                 <Button color="inherit" size="small" onClick={handleReauthenticate}>
                   Re-authenticate
                 </Button>
@@ -421,6 +463,8 @@ const Dashboard = () => {
                   value={summary.companies.length}
                   icon={<BusinessIcon />}
                   color="secondary"
+                  onClick={() => setActiveFilter('companies')}
+                  active={activeFilter === 'companies'}
                 />
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
@@ -509,6 +553,7 @@ const Dashboard = () => {
               <CompanyView 
                 applications={applications} 
                 onStatusUpdate={updateApplicationStatus}
+                onMergeApplications={mergeApplications}
               />
             ) : filteredApplications.length === 0 ? (
               <Paper sx={{ p: 3, textAlign: 'center', backgroundColor: '#111111', border: '1px solid #333333' }}>

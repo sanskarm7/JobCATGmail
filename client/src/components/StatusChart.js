@@ -13,9 +13,10 @@ const StatusChart = ({ statusBreakdown }) => {
       'offer': '#d3af37', // Gold for acceptance
       'rejected': '#950606', // Red for rejection
       'follow_up_needed': '#91973d', // Jobcat green for follow up needed
-      'other': '#333333', // Dark gray for other
+      'withdrawn': '#666666', // Dark gray for withdrawn
+      'other': '#999999', // Light gray for other
     };
-    return colorMap[status] || '#666666'; // Default gray
+    return colorMap[status] || '#999999'; // Default light gray
   };
 
   const data = Object.entries(statusBreakdown).map(([status, value]) => ({

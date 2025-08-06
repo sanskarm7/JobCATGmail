@@ -57,10 +57,7 @@ const Login = () => {
               JobCAT
             </Typography>
             <Typography variant="h6" sx={{ opacity: 0.9 }}>
-              Job Collector and Tracker
-            </Typography>
-            <Typography variant="body1" sx={{ mt: 2, opacity: 0.8 }}>
-              AI-powered job application tracking
+              Your Email Companion for Job Applications
             </Typography>
           </Box>
 

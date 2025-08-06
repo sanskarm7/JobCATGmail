@@ -9,6 +9,7 @@ const {
   updateLastScrapeTime, 
   storeApplications, 
   updateApplicationStatus,
+  mergeApplications,
   generateSummaryFromDB 
 } = require("./firebase");
 const cors = require("cors");
@@ -142,6 +143,38 @@ app.put("/api/applications/:applicationId/status", async (req, res) => {
   } catch (error) {
     console.error("❌ Error updating application status:", error);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+// Merge selected applications
+app.post("/api/applications/merge", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    console.log("❌ Unauthenticated request to merge applications");
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const { applicationIds, primaryApplicationId } = req.body;
+    const userId = req.user.id;
+
+    if (!applicationIds || !Array.isArray(applicationIds) || applicationIds.length < 2) {
+      return res.status(400).json({ error: "At least 2 application IDs are required for merging" });
+    }
+
+    console.log(`🔄 Merging ${applicationIds.length} applications for user ${userId}`);
+    const result = await mergeApplications(userId, applicationIds, primaryApplicationId);
+    
+    console.log("✅ Applications merged successfully");
+    res.json({
+      success: true,
+      mergedApplicationId: result.mergedApplicationId,
+      deletedApplicationIds: result.deletedApplicationIds,
+      mergedCount: result.mergedCount,
+      message: `Successfully merged ${result.mergedCount} applications`
+    });
+  } catch (error) {
+    console.error("❌ Error merging applications:", error);
+    res.status(500).json({ error: "Failed to merge applications" });
   }
 });
 

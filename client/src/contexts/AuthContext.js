@@ -149,7 +149,56 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("❌ Error updating application status:", error);
-      setError("Failed to update application status");
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        console.log("🔑 Authentication error detected, checking auth status...");
+        setError("Session expired. Please refresh the page and log in again.");
+        setIsAuthenticated(false);
+        setUser(null);
+      } else {
+        setError("Failed to update application status");
+      }
+      throw error;
+    }
+  };
+
+  const mergeApplications = async (applicationIds, primaryApplicationId) => {
+    try {
+      console.log(`🔄 Merging ${applicationIds.length} applications...`);
+      setError(null);
+      
+      const response = await axios.post('/api/applications/merge', {
+        applicationIds,
+        primaryApplicationId
+      });
+      
+      if (response.data.success) {
+        console.log("✅ Applications merged successfully");
+        
+        // Reload applications and summary to reflect changes
+        await loadApplications();
+        await loadJobSummary();
+        
+        return {
+          success: true,
+          mergedApplicationId: response.data.mergedApplicationId,
+          deletedApplicationIds: response.data.deletedApplicationIds,
+          mergedCount: response.data.mergedCount
+        };
+      }
+    } catch (error) {
+      console.error("❌ Error merging applications:", error);
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        console.log("🔑 Authentication error detected, checking auth status...");
+        setError("Session expired. Please refresh the page and log in again.");
+        setIsAuthenticated(false);
+        setUser(null);
+      } else {
+        setError("Failed to merge applications");
+      }
       throw error;
     }
   };
@@ -212,6 +261,7 @@ export const AuthProvider = ({ children }) => {
     getJobSummary,
     updateJobEmails,
     updateApplicationStatus,
+    mergeApplications,
     loadApplications,
     loadJobSummary,
     checkAuthStatus

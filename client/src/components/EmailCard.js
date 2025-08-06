@@ -11,6 +11,8 @@ import {
   Menu,
   MenuItem,
   Tooltip,
+  Button,
+  Collapse,
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -19,11 +21,14 @@ import {
   Info as InfoIcon,
   Edit as EditIcon,
   Check as CheckIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 
 const EmailCard = ({ email, onStatusUpdate }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   const statusOptions = [
     { value: 'received', label: 'Received', color: '#7a7f35' },
@@ -33,7 +38,8 @@ const EmailCard = ({ email, onStatusUpdate }) => {
     { value: 'offer', label: 'Offer', color: '#d3af37' },
     { value: 'rejected', label: 'Rejected', color: '#950606' },
     { value: 'follow_up_needed', label: 'Follow Up Needed', color: '#91973d' },
-    { value: 'other', label: 'Other', color: '#666666' },
+    { value: 'withdrawn', label: 'Withdrawn', color: '#666666' },
+    { value: 'other', label: 'Other', color: '#999999' },
   ];
 
   const handleStatusEdit = (event) => {
@@ -240,9 +246,61 @@ const EmailCard = ({ email, onStatusUpdate }) => {
           </Box>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {email.body}
-        </Typography>
+        {/* Email Content Preview/Expand */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {email.preview || (email.body && email.body.substring(0, 150) + (email.body.length > 150 ? "..." : "")) || "No content available"}
+          </Typography>
+          
+          {(email.body && email.body.length > 150) && (
+            <Button
+              size="small"
+              onClick={() => setIsExpanded(!isExpanded)}
+              endIcon={isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              sx={{ 
+                color: '#91973d',
+                textTransform: 'none',
+                p: 0,
+                minHeight: 'auto',
+                '&:hover': { backgroundColor: 'transparent', color: '#a3a94a' }
+              }}
+            >
+              {isExpanded ? 'Show Less' : 'Read More'}
+            </Button>
+          )}
+          
+          <Collapse in={isExpanded}>
+            <Box sx={{ mt: 2, p: 2, backgroundColor: '#0a0a0a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {email.body || "Full content not available"}
+              </Typography>
+              {email.htmlContent && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" color="text.disabled" sx={{ mb: 1, display: 'block' }}>
+                    Raw HTML content (for debugging):
+                  </Typography>
+                  <Typography 
+                    variant="body2" 
+                    color="text.disabled" 
+                    sx={{ 
+                      fontFamily: 'monospace', 
+                      fontSize: '0.75rem',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                      maxHeight: '200px',
+                      overflow: 'auto',
+                      p: 1,
+                      backgroundColor: '#111111',
+                      borderRadius: 0.5
+                    }}
+                  >
+                    {email.htmlContent.substring(0, 500) + (email.htmlContent.length > 500 ? "..." : "")}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Collapse>
+        </Box>
 
         <Divider sx={{ my: 2, borderColor: '#333333' }} />
 
