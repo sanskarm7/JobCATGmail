@@ -246,6 +246,31 @@ async function updateApplicationStatus(userId, applicationId, newStatus) {
   }
 }
 
+async function updateApplicationUrgency(userId, applicationId, newUrgency) {
+  try {
+    console.log(`🔄 Updating application ${applicationId} urgency to ${newUrgency} for user: ${userId}`);
+    const applicationRef = db.collection('users').doc(userId).collection('applications').doc(applicationId);
+    
+    // Check if application exists
+    const doc = await applicationRef.get();
+    if (!doc.exists) {
+      throw new Error(`Application ${applicationId} not found`);
+    }
+    
+    await applicationRef.update({
+      urgency: newUrgency,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      manuallyUpdated: true
+    });
+    
+    console.log(`✅ Application ${applicationId} urgency updated to ${newUrgency}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error updating application urgency for ${applicationId}:`, error);
+    throw error;
+  }
+}
+
 async function generateSummaryFromDB(userId) {
   try {
     console.log(`📊 Generating summary from database for user: ${userId}`);
@@ -394,6 +419,7 @@ module.exports = {
   storeApplication,
   storeApplications,
   updateApplicationStatus,
+  updateApplicationUrgency,
   mergeApplications,
   generateSummaryFromDB
 };

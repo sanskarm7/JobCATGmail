@@ -163,6 +163,46 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateApplicationUrgency = async (applicationId, newUrgency) => {
+    try {
+      console.log(`🔄 Updating application ${applicationId} urgency to ${newUrgency}...`);
+      setError(null);
+      
+      const response = await axios.put(`/api/applications/${applicationId}/urgency`, {
+        urgency: newUrgency
+      });
+      
+      if (response.data.success) {
+        console.log("✅ Application urgency updated successfully");
+        
+        // Update local applications state
+        setApplications(prev => prev.map(app => 
+          (app.id === applicationId || app.gmailId === applicationId) 
+            ? { ...app, urgency: newUrgency, manuallyUpdated: true }
+            : app
+        ));
+        
+        // Reload summary to reflect changes
+        await loadJobSummary();
+        
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error updating application urgency:", error);
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        console.log("🔑 Authentication error detected, checking auth status...");
+        setError("Session expired. Please refresh the page and log in again.");
+        setIsAuthenticated(false);
+        setUser(null);
+      } else {
+        setError("Failed to update application urgency");
+      }
+      throw error;
+    }
+  };
+
   const mergeApplications = async (applicationIds, primaryApplicationId) => {
     try {
       console.log(`🔄 Merging ${applicationIds.length} applications...`);
@@ -261,6 +301,7 @@ export const AuthProvider = ({ children }) => {
     getJobSummary,
     updateJobEmails,
     updateApplicationStatus,
+    updateApplicationUrgency,
     mergeApplications,
     loadApplications,
     loadJobSummary,

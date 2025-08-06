@@ -23,9 +23,10 @@ import {
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  TaskAlt as TaskAltIcon,
 } from '@mui/icons-material';
 
-const EmailCard = ({ email, onStatusUpdate }) => {
+const EmailCard = ({ email, onStatusUpdate, onUrgencyUpdate }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -64,6 +65,19 @@ const EmailCard = ({ email, onStatusUpdate }) => {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleMarkAsAddressed = async () => {
+    setIsUpdating(true);
+    try {
+      if (onUrgencyUpdate) {
+        await onUrgencyUpdate(email.id || email.gmailId, 'low');
+      }
+    } catch (error) {
+      console.error('Failed to update urgency:', error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
   // Use the same color scheme as StatusChart for consistency
   const getStatusColor = (status) => {
@@ -215,7 +229,7 @@ const EmailCard = ({ email, onStatusUpdate }) => {
             </Menu>
             
             {/* Sentiment and Urgency Row */}
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Chip
                 label={analysis.sentiment.toUpperCase()}
                 size="small"
@@ -242,6 +256,29 @@ const EmailCard = ({ email, onStatusUpdate }) => {
                   },
                 }}
               />
+              {/* Mark as Addressed button for high urgency items */}
+              {analysis.urgency === 'high' && (
+                <Tooltip title="Mark as Addressed">
+                  <IconButton
+                    size="small"
+                    onClick={handleMarkAsAddressed}
+                    disabled={isUpdating}
+                    sx={{
+                      color: '#91973d',
+                      padding: '4px',
+                      '&:hover': {
+                        backgroundColor: 'rgba(145, 151, 61, 0.1)',
+                        color: '#a3a94a',
+                      },
+                      '&:disabled': {
+                        opacity: 0.5,
+                      },
+                    }}
+                  >
+                    {isUpdating ? <CheckIcon fontSize="small" /> : <TaskAltIcon fontSize="small" />}
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           </Box>
         </Box>

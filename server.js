@@ -9,6 +9,7 @@ const {
   updateLastScrapeTime, 
   storeApplications, 
   updateApplicationStatus,
+  updateApplicationUrgency,
   mergeApplications,
   generateSummaryFromDB 
 } = require("./firebase");
@@ -143,6 +144,36 @@ app.put("/api/applications/:applicationId/status", async (req, res) => {
   } catch (error) {
     console.error("❌ Error updating application status:", error);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+// Update application urgency
+app.put("/api/applications/:applicationId/urgency", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    console.log("❌ Unauthenticated request to update application urgency");
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const { applicationId } = req.params;
+    const { urgency } = req.body;
+    const userId = req.user.id;
+
+    if (!urgency) {
+      return res.status(400).json({ error: "Urgency is required" });
+    }
+
+    console.log(`🔄 Updating application ${applicationId} urgency to ${urgency} for user ${userId}`);
+    await updateApplicationUrgency(userId, applicationId, urgency);
+    
+    console.log("✅ Application urgency updated successfully");
+    res.json({
+      success: true,
+      message: "Urgency updated successfully"
+    });
+  } catch (error) {
+    console.error("❌ Error updating application urgency:", error);
+    res.status(500).json({ error: "Failed to update urgency" });
   }
 });
 

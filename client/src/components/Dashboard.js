@@ -46,6 +46,7 @@ const Dashboard = () => {
     logout, 
     updateJobEmails, 
     updateApplicationStatus,
+    updateApplicationUrgency,
     mergeApplications,
     loadApplications, 
     loadJobSummary 
@@ -553,6 +554,7 @@ const Dashboard = () => {
               <CompanyView 
                 applications={applications} 
                 onStatusUpdate={updateApplicationStatus}
+                onUrgencyUpdate={updateApplicationUrgency}
                 onMergeApplications={mergeApplications}
               />
             ) : filteredApplications.length === 0 ? (
@@ -571,6 +573,7 @@ const Dashboard = () => {
                       <EmailCard 
                         email={application} 
                         onStatusUpdate={updateApplicationStatus}
+                        onUrgencyUpdate={updateApplicationUrgency}
                       />
                     </Grid>
                   ))}

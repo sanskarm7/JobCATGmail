@@ -35,7 +35,7 @@ import {
   Merge as MergeIcon,
 } from '@mui/icons-material';
 
-const CompanyView = ({ applications, onStatusUpdate, onMergeApplications }) => {
+const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onMergeApplications }) => {
   const [editingStatus, setEditingStatus] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
