@@ -14,6 +14,55 @@ const {
   mergeApplications,
   generateSummaryFromDB 
 } = require("./firebase");
+
+// Live feed system for streaming logs
+const activeSyncSessions = new Map(); // userId -> response object
+
+// Enhanced logger that streams to SSE clients
+function streamLog(userId, level, message, data = null) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level,
+    message,
+    data,
+    id: Date.now()
+  };
+  
+  // Always log to console
+  const originalLog = level === 'error' ? console.error : console.log;
+  originalLog(`${message}${data ? ` ${JSON.stringify(data)}` : ''}`);
+  
+  // Stream to connected SSE clients
+  console.log(`📤 Attempting to stream log to user ${userId}. Active sessions: ${activeSyncSessions.size}`);
+  if (activeSyncSessions.has(userId)) {
+    const res = activeSyncSessions.get(userId);
+    try {
+      console.log(`📤 Streaming log: ${level} - ${message}`);
+      res.write(`data: ${JSON.stringify(logEntry)}\n\n`);
+    } catch (error) {
+      console.error('❌ Error streaming log:', error);
+      activeSyncSessions.delete(userId);
+    }
+  } else {
+    console.log(`⚠️ No active SSE session for user ${userId}`);
+  }
+}
+
+// Create a scoped logger for a specific user session
+function createSyncLogger(userId) {
+  return {
+    log: (message, data) => streamLog(userId, 'info', message, data),
+    error: (message, data) => streamLog(userId, 'error', message, data),
+    step: (stepNumber, title, message) => streamLog(userId, 'step', `📋 Step ${stepNumber}: ${title}`, { step: stepNumber, title, message }),
+    progress: (current, total, message) => streamLog(userId, 'progress', message, { current, total, percentage: Math.round((current / total) * 100) }),
+    success: (message, data) => streamLog(userId, 'success', `✅ ${message}`, data),
+    warning: (message, data) => streamLog(userId, 'warning', `⚠️ ${message}`, data),
+    company: (message, data) => streamLog(userId, 'company', `🏢 ${message}`, data),
+    ai: (message, data) => streamLog(userId, 'ai', `🤖 ${message}`, data),
+    email: (message, data) => streamLog(userId, 'email', `📧 ${message}`, data)
+  };
+}
 const cors = require("cors");
 
 const app = express();
@@ -74,30 +123,48 @@ app.post("/api/update-emails", async (req, res) => {
   }
 
   try {
-    console.log("🔄 Starting incremental email sync...");
     const userId = req.user.id;
+    console.log(`🔄 Starting sync for user: ${userId}`);
+    const logger = createSyncLogger(userId);
     
-    // Step 1: Get last scrape time
-    console.log("📅 Step 1: Checking last scrape time...");
+    // Test that logging works immediately
+    logger.log("🔄 Starting incremental email sync...");
+    logger.log("🧪 Testing live feed connection...");
+    
+    // Step 1: Get existing applications for company lookup
+    logger.step(1, "Loading Applications", "Getting existing applications for company lookup");
+    const existingApplications = await getUserApplications(userId);
+    logger.success(`Loaded ${existingApplications.length} existing applications`);
+    
+    // Step 2: Get last scrape time
+    logger.step(2, "Checking Last Sync", "Determining sync starting point");
     const lastScrapeTime = await getLastScrapeTime(userId);
+    if (lastScrapeTime) {
+      logger.log(`📅 Last sync: ${new Date(lastScrapeTime).toLocaleString()}`);
+    } else {
+      logger.log("📅 First sync - will check last 50 days");
+    }
     
-    // Step 2: Fetch new emails since last scrape
-    console.log("📧 Step 2: Fetching new emails...");
-    const newEmails = await fetchIncrementalJobEmails(req.user.accessToken, lastScrapeTime);
+    // Step 3: Fetch new emails since last scrape (with company matching)
+    logger.step(3, "Analyzing Emails", "Scanning emails with AI and company matching");
+    const newEmails = await fetchIncrementalJobEmails(req.user.accessToken, lastScrapeTime, existingApplications, logger);
     
-    // Step 3: Store new applications in database
-    console.log("💾 Step 3: Storing new applications...");
+    // Step 4: Store new applications in database
+    logger.step(4, "Storing Data", "Saving new applications to database");
     const storageResult = await storeApplications(userId, newEmails);
+    logger.success(`Stored ${storageResult.storedCount} new applications, updated ${storageResult.updatedCount} existing`);
     
-    // Step 4: Update last scrape time
-    console.log("📅 Step 4: Updating last scrape time...");
+    // Step 5: Update last scrape time
+    logger.step(5, "Updating Sync Time", "Recording sync completion time");
     await updateLastScrapeTime(userId);
+    logger.success("Sync timestamp updated");
     
-    // Step 5: Generate summary from database
-    console.log("📊 Step 5: Generating summary...");
+    // Step 6: Generate summary from database
+    logger.step(6, "Generating Summary", "Calculating application statistics");
     const summary = await generateSummaryFromDB(userId);
+    logger.success("Summary generated successfully");
     
-    console.log("✅ Incremental sync completed successfully");
+    logger.success("Incremental sync completed successfully!");
     res.json({
       success: true,
       newEmailsCount: storageResult.storedCount,
@@ -309,6 +376,53 @@ app.get("/api/auth/status", (req, res) => {
   res.json({ 
     authenticated: isAuth,
     user: req.user ? { id: req.user.id, displayName: req.user.displayName } : null
+  });
+});
+
+// Server-Sent Events endpoint for live sync feed
+app.get("/api/sync-feed", (req, res) => {
+  console.log('📡 SSE connection attempt from:', req.isAuthenticated() ? req.user.id : 'unauthenticated');
+  
+  if (!req.isAuthenticated()) {
+    console.log('❌ SSE connection rejected - not authenticated');
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const userId = req.user.id;
+  console.log(`✅ SSE connection established for user: ${userId}`);
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': 'http://localhost:3001',
+    'Access-Control-Allow-Credentials': 'true'
+  });
+
+  // Store the response object for this user
+  activeSyncSessions.set(userId, res);
+  console.log(`📡 Active SSE sessions: ${activeSyncSessions.size}`);
+  
+  // Send initial connection message
+  const initialMessage = {
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    message: '🔗 Live feed connected',
+    id: Date.now()
+  };
+  console.log('📤 Sending initial SSE message:', initialMessage);
+  res.write(`data: ${JSON.stringify(initialMessage)}\n\n`);
+
+  // Clean up on client disconnect
+  req.on('close', () => {
+    activeSyncSessions.delete(userId);
+    console.log(`📡 SSE client disconnected: ${userId}. Active sessions: ${activeSyncSessions.size}`);
+  });
+
+  req.on('error', (error) => {
+    console.error('❌ SSE error:', error);
+    activeSyncSessions.delete(userId);
   });
 });
 

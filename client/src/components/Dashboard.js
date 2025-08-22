@@ -37,6 +37,7 @@ import {
 import StatsCard from './StatsCard';
 import EmailCard from './EmailCard';
 import StatusChart from './StatusChart';
+import LiveFeed from './LiveFeed';
 
 const Dashboard = () => {
   const { 
@@ -61,6 +62,7 @@ const Dashboard = () => {
   const [progress, setProgress] = useState(0);
   const [activeFilter, setActiveFilter] = useState('all'); // New filter state
   const [sortOrder, setSortOrder] = useState('desc'); // 'desc' for newest first, 'asc' for oldest first
+  const [showLiveFeed, setShowLiveFeed] = useState(false);
 
   useEffect(() => {
     // Data is now automatically loaded in AuthContext when user is authenticated
@@ -268,31 +270,20 @@ const Dashboard = () => {
     try {
       console.log("🔄 Starting incremental update...");
       setUpdating(true);
-      // setError(null); // This line was removed from the new_code, so it's removed here.
-      
-      // Simulate progress updates
-      setLoadingStep('updating');
-      setProgress(20);
-      
-      setTimeout(() => {
-        setLoadingStep('analyzing');
-        setProgress(50);
-      }, 1000);
-      
-      setTimeout(() => {
-        setLoadingStep('processing');
-        setProgress(80);
-      }, 2000);
+      setShowLiveFeed(true); // Show live feed
+      setLoadingStep('Starting sync...');
+      setProgress(0);
       
       const result = await updateJobEmails();
       
-      setLoadingStep('complete');
+      setLoadingStep('Sync completed!');
       setProgress(100);
       
       setTimeout(() => {
         setUpdating(false);
         setLoadingStep('');
         setProgress(0);
+        // Keep live feed open for user to review
       }, 1500);
       
       console.log("✅ Update completed successfully:", result);
@@ -391,89 +382,7 @@ const Dashboard = () => {
     return <Navigate to="/login" replace />;
   }
 
-  if (updating) {
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          backgroundColor: '#000000',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 2,
-        }}
-      >
-        <Container maxWidth="sm">
-          <Paper
-            elevation={8}
-            sx={{
-              borderRadius: 3,
-              overflow: 'hidden',
-              backgroundColor: '#111111',
-              border: '1px solid #333333',
-            }}
-          >
-            <Box
-              sx={{
-                backgroundColor: '#000000',
-                color: 'white',
-                padding: 4,
-                textAlign: 'center',
-                borderBottom: '1px solid #333333',
-              }}
-            >
-              <Typography variant="h4" component="h1" gutterBottom>
-                JobCAT
-              </Typography>
-              <Typography variant="h6" sx={{ opacity: 0.9 }}>
-                Job Collector and Tracker
-              </Typography>
-            </Box>
-
-            <Box sx={{ p: 4, backgroundColor: '#111111' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-                {getLoadingIcon()}
-                <Typography variant="h6" sx={{ ml: 2 }}>
-                  {getLoadingMessage()}
-                </Typography>
-              </Box>
-
-              <LinearProgress 
-                variant="determinate" 
-                value={progress} 
-                sx={{ 
-                  height: 8, 
-                  borderRadius: 4,
-                  mb: 2,
-                  backgroundColor: '#333333',
-                  '& .MuiLinearProgress-bar': {
-                    borderRadius: 4,
-                    backgroundColor: '#91973d',
-                  }
-                }} 
-              />
-
-              <Typography variant="body2" color="text.secondary" align="center">
-                {loadingStep === 'analyzing' && 'Using AI to classify emails and extract key information...'}
-                {loadingStep === 'processing' && 'Extracting company names, positions, and status updates...'}
-                {loadingStep === 'updating' && 'Checking for new emails and updating your applications...'}
-                {loadingStep === 'complete' && 'Preparing your dashboard...'}
-                {!['analyzing', 'processing', 'updating', 'complete'].includes(loadingStep) && 'Please wait while we process your emails...'}
-              </Typography>
-
-              {loadingStep === 'analyzing' && (
-                <Box sx={{ mt: 3, textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    This may take a few moments as we analyze each email with AI
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          </Paper>
-        </Container>
-      </Box>
-    );
-  }
+  // Removed old loading screen - now using live feed instead
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#000000' }}>
@@ -489,7 +398,7 @@ const Dashboard = () => {
             disabled={updating}
             sx={{ mr: 2 }}
           >
-            {updating ? 'Updating...' : 'Sync'}
+            {updating ? 'Syncing...' : 'Sync with Gmail'}
           </Button>
           <Button
             color="inherit"
@@ -761,6 +670,12 @@ const Dashboard = () => {
           </Box>
         )}
       </Container>
+      
+      {/* Live Feed Component */}
+      <LiveFeed 
+        isVisible={showLiveFeed}
+        onClose={() => setShowLiveFeed(false)}
+      />
     </Box>
   );
 };

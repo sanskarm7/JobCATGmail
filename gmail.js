@@ -522,44 +522,185 @@ async function analyzeAllJobEmails(accessToken) {
   }
 }
 
-// New function for incremental email scraping
-async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
+// Create company lookup system for efficient matching
+function createCompanyLookup(existingApplications) {
+  const companyData = new Map();
+  const emailDomains = new Set();
+  
+  if (!existingApplications || existingApplications.length === 0) {
+    console.log("📋 No existing applications found for company lookup");
+    return { companyData, emailDomains };
+  }
+  
+  existingApplications.forEach(app => {
+    const company = app.company || app.aiAnalysis?.company;
+    if (!company) return;
+    
+    // Normalize company name for matching
+    const normalizedCompany = company.toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove special characters
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+    
+    // Store company data
+    if (!companyData.has(normalizedCompany)) {
+      companyData.set(normalizedCompany, {
+        originalName: company,
+        variations: new Set(),
+        emailDomains: new Set(),
+        applicationCount: 0
+      });
+    }
+    
+    const companyInfo = companyData.get(normalizedCompany);
+    companyInfo.applicationCount++;
+    
+    // Add company name variations
+    companyInfo.variations.add(company.toLowerCase());
+    companyInfo.variations.add(normalizedCompany);
+    
+    // Extract potential email domains from company name
+    const domainVariations = generateEmailDomains(company);
+    domainVariations.forEach(domain => {
+      companyInfo.emailDomains.add(domain);
+      emailDomains.add(domain);
+    });
+    
+    // Extract domain from existing emails if available
+    if (app.from) {
+      const emailDomain = extractDomainFromEmail(app.from);
+      if (emailDomain) {
+        companyInfo.emailDomains.add(emailDomain);
+        emailDomains.add(emailDomain);
+      }
+    }
+  });
+  
+  console.log(`🏢 Company lookup created: ${companyData.size} companies, ${emailDomains.size} email domains`);
+  return { companyData, emailDomains };
+}
+
+// Generate potential email domains from company name
+function generateEmailDomains(companyName) {
+  const domains = new Set();
+  const cleaned = companyName.toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\b(inc|corp|corporation|llc|ltd|limited|company|co)\b/g, '')
+    .trim();
+  
+  // Single word companies
+  const words = cleaned.split(/\s+/).filter(word => word.length > 2);
+  if (words.length === 1) {
+    domains.add(`${words[0]}.com`);
+  } else if (words.length > 1) {
+    // Multi-word companies
+    domains.add(`${words.join('')}.com`); // "wellsfargo.com"
+    domains.add(`${words.join('-')}.com`); // "wells-fargo.com"
+    domains.add(`${words[0]}.com`); // "wells.com"
+  }
+  
+  return Array.from(domains);
+}
+
+// Extract domain from email address
+function extractDomainFromEmail(email) {
+  const match = email.match(/<(.+@(.+?))>|(\S+@(\S+))/);
+  if (match) {
+    return match[2] || match[4]; // Extract domain part
+  }
+  return null;
+}
+
+// Check if email matches any existing company
+function checkCompanyMatch(subject, from, body, companyData, emailDomains) {
+  const emailDomain = extractDomainFromEmail(from);
+  
+  // Check email domain match first (most reliable)
+  if (emailDomain && emailDomains.has(emailDomain)) {
+    console.log(`✅ Email domain match found: ${emailDomain}`);
+    
+    // Find which company this domain belongs to
+    for (const [companyName, info] of companyData) {
+      if (info.emailDomains.has(emailDomain)) {
+        return {
+          isMatch: true,
+          matchType: 'email_domain',
+          company: info.originalName,
+          confidence: 0.9,
+          matchedDomain: emailDomain
+        };
+      }
+    }
+  }
+  
+  // Check company name in subject or body
+  const textToSearch = `${subject} ${body}`.toLowerCase();
+  
+  for (const [normalizedCompany, info] of companyData) {
+    for (const variation of info.variations) {
+      if (textToSearch.includes(variation)) {
+        console.log(`✅ Company name match found: ${variation} -> ${info.originalName}`);
+        return {
+          isMatch: true,
+          matchType: 'company_name',
+          company: info.originalName,
+          confidence: 0.7,
+          matchedText: variation
+        };
+      }
+    }
+  }
+  
+  return { isMatch: false };
+}
+
+// New function for incremental email scraping with company lookup
+async function fetchIncrementalJobEmails(accessToken, sinceDate = null, existingApplications = [], logger = console) {
   try {
-    console.log("🔐 Setting up Gmail authentication for incremental analysis...");
+    logger.log("🔐 Setting up Gmail authentication...");
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: accessToken });
 
-    console.log("📧 Initializing Gmail API for incremental analysis...");
+    logger.log("📧 Initializing Gmail API...");
     const gmail = google.gmail({ version: "v1", auth });
 
-    // Build query based on date and job-related keywords
-    const jobKeywords = 'subject:"thank you for applying" OR subject:"application received" OR subject:"application" OR subject:"interview" OR subject:"position" OR subject:"job"';
-    let query = `(${jobKeywords}) newer_than:50d`; // Default to 50 days
+    // Create company lookup system from existing applications
+    logger.company("Creating company lookup system...");
+    const { companyData, emailDomains } = createCompanyLookup(existingApplications);
+    logger.company(`Company lookup created: ${companyData.size} companies, ${emailDomains.size} email domains`);
+    
+    // Expand search to include all emails, not just keyword matches
+    let query = 'newer_than:50d'; // Default to 50 days, no keyword filtering
     if (sinceDate) {
       const daysSince = Math.ceil((Date.now() - new Date(sinceDate).getTime()) / (1000 * 60 * 60 * 24));
-      query = `(${jobKeywords}) newer_than:${daysSince}d`;
-      console.log(`📅 Fetching job-related emails since ${sinceDate} (${daysSince} days ago)`);
+      query = `newer_than:${daysSince}d`;
+      logger.email(`Fetching emails since ${sinceDate} (${daysSince} days ago)`);
     } else {
-      console.log("📅 No last scrape date found, fetching job-related emails from last 50 days");
+      logger.email("No last scrape found, fetching emails from last 50 days");
     }
 
-    console.log(`🔍 Fetching emails with query: ${query}`);
+    logger.email(`Searching with query: ${query}`);
     const res = await gmail.users.messages.list({
       userId: "me",
       q: query,
-      maxResults: 500, // Increased from 100 to ensure we don't miss emails
+      maxResults: 500, // Process more emails to catch follow-ups
     });
 
     const messages = res.data.messages || [];
-    console.log(`📨 Found ${messages.length} emails to analyze`);
+    logger.email(`Found ${messages.length} emails to analyze`);
 
     const jobEmails = [];
     let aiProcessedCount = 0;
     let skippedCount = 0;
+    let companyMatchCount = 0;
 
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
-      console.log(`📝 Analyzing email ${i + 1}/${messages.length} (ID: ${msg.id})...`);
+      
+      // Show progress every 10 emails or for important emails
+      if (i % 10 === 0 || i === messages.length - 1) {
+        logger.progress(i + 1, messages.length, `Analyzing email ${i + 1}/${messages.length}`);
+      }
       
       const msgRes = await gmail.users.messages.get({ userId: "me", id: msg.id });
       const headers = msgRes.data.payload.headers;
@@ -569,23 +710,55 @@ async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
       const from = headers.find((h) => h.name === "From")?.value;
       const date = headers.find((h) => h.name === "Date")?.value;
 
-      console.log(`   Subject: ${subject}`);
-      console.log(`   From: ${from}`);
-
-      // Pre-filter with keywords before sending to AI
+      // First, check for company matches (faster and more reliable for follow-ups)
+      const companyMatch = checkCompanyMatch(subject, from, emailContent.plainText, companyData, emailDomains);
+      
+      // Pre-filter with keywords for traditional job emails
       const isLikelyJobEmail = checkJobKeywords(subject, emailContent.plainText, from);
       
-      if (isLikelyJobEmail) {
-        console.log(`   ✅ Likely job email - sending to AI for analysis`);
+      if (companyMatch.isMatch) {
+        logger.company(`Company match: ${companyMatch.company} (${companyMatch.matchType})`);
+        logger.email(`📧 "${subject}" from ${from}`);
+        companyMatchCount++;
+        aiProcessedCount++;
+        
+        // Analyze with AI, but with company context
+        logger.ai("Analyzing company match...");
+        const aiAnalysis = await analyzeEmailWithAI(subject, emailContent.originalContent, from);
+        
+        // Accept lower confidence for company matches since we know it's from a relevant company
+        if (aiAnalysis.isJobApplication && aiAnalysis.confidence > 0.5) {
+          logger.success(`Job application confirmed: ${aiAnalysis.company} - ${aiAnalysis.position} (${Math.round(aiAnalysis.confidence * 100)}% confidence)`);
+          jobEmails.push({
+            gmailId: msg.id,
+            subject,
+            from,
+            date,
+            body: emailContent.plainText,
+            htmlContent: emailContent.htmlContent,
+            preview: emailContent.plainText.substring(0, 150) + (emailContent.plainText.length > 150 ? "..." : ""),
+            aiAnalysis: {
+              ...aiAnalysis,
+              company: companyMatch.company, // Use matched company name for consistency
+              matchType: companyMatch.matchType,
+              confidence: Math.max(aiAnalysis.confidence, companyMatch.confidence) // Use higher confidence
+            },
+            scrapedAt: new Date().toISOString()
+          });
+        } else {
+          logger.warning(`Company match but not job-related (${Math.round(aiAnalysis.confidence * 100)}% confidence)`);
+        }
+      } else if (isLikelyJobEmail) {
+        logger.email(`📧 Keyword match: "${subject}" from ${from}`);
         aiProcessedCount++;
         
         // Analyze with AI using original content
-        console.log(`   🤖 Analyzing with AI...`);
+        logger.ai("Analyzing keyword match...");
         const aiAnalysis = await analyzeEmailWithAI(subject, emailContent.originalContent, from);
 
         // Only include emails that are likely job-related with high confidence
         if (aiAnalysis.isJobApplication && aiAnalysis.confidence > 0.7) {
-          console.log(`   ✅ High-confidence job application found: ${aiAnalysis.company} - ${aiAnalysis.position} (confidence: ${aiAnalysis.confidence})`);
+          logger.success(`Job application found: ${aiAnalysis.company} - ${aiAnalysis.position} (${Math.round(aiAnalysis.confidence * 100)}% confidence)`);
           jobEmails.push({
             gmailId: msg.id, // Use Gmail ID as document key
             subject,
@@ -594,24 +767,28 @@ async function fetchIncrementalJobEmails(accessToken, sinceDate = null) {
             body: emailContent.plainText, // Clean text for display
             htmlContent: emailContent.htmlContent, // Full HTML content
             preview: emailContent.plainText.substring(0, 150) + (emailContent.plainText.length > 150 ? "..." : ""),
-            aiAnalysis,
+            aiAnalysis: {
+              ...aiAnalysis,
+              matchType: 'keyword'
+            },
             scrapedAt: new Date().toISOString()
           });
         } else {
-          console.log(`   ⏭️ AI determined not job-related or low confidence (${aiAnalysis.confidence})`);
+          logger.log(`⏭️ Not job-related (${Math.round(aiAnalysis.confidence * 100)}% confidence)`);
         }
       } else {
-        console.log(`   ⏭️ Pre-filtered as non-job email - skipping AI analysis`);
         skippedCount++;
       }
     }
 
-    console.log(`✅ Incremental analysis complete!`);
-    console.log(`   - Total emails processed: ${messages.length}`);
-    console.log(`   - Emails sent to AI: ${aiProcessedCount}`);
-    console.log(`   - Emails skipped (pre-filtered): ${skippedCount}`);
-    console.log(`   - Job-related emails found: ${jobEmails.length}`);
-    console.log(`   - Cost savings: ~${Math.round((skippedCount / messages.length) * 100)}% fewer AI calls`);
+    logger.success("Email analysis complete!");
+    logger.log(`📊 Results: ${jobEmails.length} job emails found from ${messages.length} total emails`);
+    logger.log(`🏢 Company matches: ${companyMatchCount}`);
+    logger.log(`🤖 AI analyzed: ${aiProcessedCount} emails`);
+    logger.log(`⏭️ Skipped: ${skippedCount} emails`);
+    if (messages.length > 0) {
+      logger.log(`💰 Cost savings: ~${Math.round((skippedCount / messages.length) * 100)}% fewer AI calls`);
+    }
     
     return jobEmails;
   } catch (error) {
