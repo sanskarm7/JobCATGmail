@@ -9,35 +9,35 @@ const openai = new OpenAI({
 async function fetchJobEmails(accessToken) {
   try {
     console.log("🔐 Setting up Gmail authentication...");
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: accessToken });
 
     console.log("📧 Initializing Gmail API...");
-    const gmail = google.gmail({ version: "v1", auth });
+  const gmail = google.gmail({ version: "v1", auth });
 
     console.log("🔍 Searching for job-related emails...");
-    const res = await gmail.users.messages.list({
-      userId: "me",
+  const res = await gmail.users.messages.list({
+    userId: "me",
       q: 'subject:"thank you for applying" OR subject:"application received" OR subject:"application" OR subject:"interview" OR subject:"position" OR subject:"job" newer_than:50d',
       maxResults: 10, // Increased from 10 to get more comprehensive results
-    });
+  });
 
-    const messages = res.data.messages || [];
+  const messages = res.data.messages || [];
     console.log(`📨 Found ${messages.length} potential job emails`);
 
-    const detailedMessages = [];
+  const detailedMessages = [];
 
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
       console.log(`📝 Processing email ${i + 1}/${messages.length}...`);
       
-      const msgRes = await gmail.users.messages.get({ userId: "me", id: msg.id });
-      const headers = msgRes.data.payload.headers;
+    const msgRes = await gmail.users.messages.get({ userId: "me", id: msg.id });
+    const headers = msgRes.data.payload.headers;
       const emailContent = extractEmailBody(msgRes.data.payload);
 
-      const subject = headers.find((h) => h.name === "Subject")?.value;
-      const from = headers.find((h) => h.name === "From")?.value;
-      const date = headers.find((h) => h.name === "Date")?.value;
+    const subject = headers.find((h) => h.name === "Subject")?.value;
+    const from = headers.find((h) => h.name === "From")?.value;
+    const date = headers.find((h) => h.name === "Date")?.value;
 
       console.log(`   Subject: ${subject}`);
       console.log(`   From: ${from}`);

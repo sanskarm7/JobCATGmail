@@ -36,7 +36,7 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 
-const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onDeleteApplication, onMergeApplications }) => {
+const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onDeleteApplication, onMergeApplications, sortOrder = 'desc' }) => {
   const [editingStatus, setEditingStatus] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -92,17 +92,33 @@ const CompanyView = ({ applications, onStatusUpdate, onUrgencyUpdate, onDeleteAp
     return acc;
   }, {});
 
-  // Sort companies by number of applications (descending) and sort applications within each company by date (newest first)
+  // Sort applications within each company by date, then sort companies by their most recent application date
   const sortedCompanies = Object.entries(companiesByName)
     .map(([company, apps]) => [
       company, 
       apps.sort((a, b) => {
         const dateA = getApplicationDate(a);
         const dateB = getApplicationDate(b);
-        return dateB - dateA; // Descending order (newest first)
+        if (sortOrder === 'desc') {
+          return dateB - dateA; // Descending order (newest first)
+        } else {
+          return dateA - dateB; // Ascending order (oldest first)
+        }
       })
     ])
-    .sort(([, a], [, b]) => b.length - a.length);
+    .sort(([companyA, appsA], [companyB, appsB]) => {
+      // Find the actual most recent date for each company (not affected by current sort order)
+      const allDatesA = appsA.map(app => getApplicationDate(app));
+      const allDatesB = appsB.map(app => getApplicationDate(app));
+      const mostRecentDateA = new Date(Math.max(...allDatesA));
+      const mostRecentDateB = new Date(Math.max(...allDatesB));
+      
+      if (sortOrder === 'desc') {
+        return mostRecentDateB - mostRecentDateA; // Companies with newest applications first
+      } else {
+        return mostRecentDateA - mostRecentDateB; // Companies with oldest applications first
+      }
+    });
 
   const getStatusColor = (status) => {
     const option = statusOptions.find(opt => opt.value === status);

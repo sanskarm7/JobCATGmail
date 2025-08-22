@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CompanyView from './CompanyView';
@@ -30,6 +30,9 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   HourglassEmpty as HourglassIcon,
+  Sort as SortIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
 import StatsCard from './StatsCard';
 import EmailCard from './EmailCard';
@@ -57,6 +60,7 @@ const Dashboard = () => {
   const [loadingStep, setLoadingStep] = useState('');
   const [progress, setProgress] = useState(0);
   const [activeFilter, setActiveFilter] = useState('all'); // New filter state
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' for newest first, 'asc' for oldest first
 
   useEffect(() => {
     // Data is now automatically loaded in AuthContext when user is authenticated
@@ -74,15 +78,48 @@ const Dashboard = () => {
       app.aiAnalysis?.date
     ].filter(Boolean); // Remove null/undefined values
     
-    if (dates.length === 0) return new Date(0); // Fallback to epoch for apps with no dates
+    if (dates.length === 0) {
+      console.log('⚠️ No dates found for app:', app.company || app.aiAnalysis?.company);
+      return new Date(0); // Fallback to epoch for apps with no dates
+    }
     
     // Convert to Date objects and find the most recent
-    const datObjects = dates.map(d => new Date(d));
+    const datObjects = dates.map(d => {
+      let date;
+      
+      // Handle Firestore Timestamp objects
+      if (d && typeof d === 'object' && d._seconds !== undefined) {
+        // Convert Firestore Timestamp to JavaScript Date
+        date = new Date(d._seconds * 1000 + (d._nanoseconds || 0) / 1000000);
+      } else {
+        // Handle regular date strings
+        date = new Date(d);
+      }
+      
+      if (isNaN(date.getTime())) {
+        console.log('⚠️ Invalid date found:', d, 'for app:', app.company || app.aiAnalysis?.company);
+        return new Date(0);
+      }
+      return date;
+    }).filter(d => !isNaN(d.getTime())); // Filter out any remaining invalid dates
+    
+    if (datObjects.length === 0) {
+      console.log('⚠️ All dates invalid for app:', app.company || app.aiAnalysis?.company);
+      return new Date(0); // Fallback if all dates were invalid
+    }
+    
     return new Date(Math.max(...datObjects));
   };
 
-  // Filter and sort applications based on active filter
-  const getFilteredApplications = () => {
+
+
+  const filteredApplications = useMemo(() => {
+    console.log('🔄 Recomputing filteredApplications with:', { 
+      applicationsCount: applications?.length || 0, 
+      activeFilter, 
+      sortOrder 
+    });
+    
     if (!applications || applications.length === 0) return [];
     
     let filtered;
@@ -128,12 +165,35 @@ const Dashboard = () => {
         break;
     }
 
-    // Sort by date (newest first)
-    const sorted = filtered.sort((a, b) => {
+    // Sort by date based on sortOrder state (create a new array to avoid mutation)
+    const sorted = [...filtered].sort((a, b) => {
       try {
         const dateA = getApplicationDate(a);
         const dateB = getApplicationDate(b);
-        return dateB - dateA; // Descending order (newest first)
+        
+        // Debug logging for first few applications
+        if (filtered.indexOf(a) < 3 || filtered.indexOf(b) < 3) {
+          console.log('📊 Sorting debug:', {
+            appA: { 
+              company: a.company || a.aiAnalysis?.company, 
+              dateA: isNaN(dateA.getTime()) ? 'Invalid Date' : dateA.toISOString(), 
+              rawDate: a.date || a.lastEmailDate 
+            },
+            appB: { 
+              company: b.company || b.aiAnalysis?.company, 
+              dateB: isNaN(dateB.getTime()) ? 'Invalid Date' : dateB.toISOString(), 
+              rawDate: b.date || b.lastEmailDate 
+            },
+            sortOrder,
+            comparison: sortOrder === 'desc' ? (dateB - dateA) : (dateA - dateB)
+          });
+        }
+        
+        if (sortOrder === 'desc') {
+          return dateB - dateA; // Descending order (newest first)
+        } else {
+          return dateA - dateB; // Ascending order (oldest first)
+        }
       } catch (error) {
         console.error("❌ Error sorting applications:", error, {
           appA: { id: a?.id, hasDate: !!(a?.date || a?.lastEmailDate) },
@@ -143,23 +203,18 @@ const Dashboard = () => {
       }
     });
     
-    // console.log(`📊 Filtered result: ${sorted.length} applications`);
-    
-    if (sorted.length !== applications.length) {
-      const filtered_ids = sorted.map(app => app.id);
-      const missing = applications.filter(app => !filtered_ids.includes(app.id));
-      console.log(`📋 Missing applications from filter:`, missing.map(app => ({
-        id: app.id,
-        status: app.status || app.aiAnalysis?.status,
+    // Log the final sorted order
+    console.log('📋 Final sorted order:', sorted.slice(0, 5).map(app => {
+      const appDate = getApplicationDate(app);
+      return {
         company: app.company || app.aiAnalysis?.company,
-        hasRequiredFields: !!(app.status || app.aiAnalysis?.status) && !!(app.company || app.aiAnalysis?.company)
-      })));
-    }
+        date: isNaN(appDate.getTime()) ? 'Invalid Date' : appDate.toISOString(),
+        subject: app.subject
+      };
+    }));
     
     return sorted;
-  };
-
-  const filteredApplications = getFilteredApplications();
+  }, [applications, activeFilter, sortOrder]);
 
   const getFilterTitle = () => {
     const filterTitles = {
@@ -558,23 +613,85 @@ const Dashboard = () => {
               <Typography variant="h5" gutterBottom sx={{ color: '#ffffff', mb: 0 }}>
                 {getFilterTitle()}
               </Typography>
-              {activeFilter !== 'all' && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => setActiveFilter('all')}
-                  sx={{
-                    borderColor: '#91973d',
-                    color: '#91973d',
-                    '&:hover': {
-                      borderColor: '#7a7f35',
-                      backgroundColor: 'rgba(145, 151, 61, 0.1)',
-                    },
-                  }}
-                >
-                  Show All
-                </Button>
-              )}
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {/* Sort Controls - only show for email lists, not company view */}
+                {activeFilter !== 'companies' && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ color: '#cccccc', display: { xs: 'none', sm: 'block' } }}>
+                      Sort by date:
+                    </Typography>
+                    <Button
+                      variant={sortOrder === 'desc' ? 'contained' : 'outlined'}
+                      size="small"
+                      onClick={() => {
+                        console.log('Setting sort order to desc');
+                        setSortOrder('desc');
+                      }}
+                      startIcon={<ArrowDownwardIcon />}
+                      sx={{
+                        minWidth: { xs: '40px', sm: 'auto' },
+                        backgroundColor: sortOrder === 'desc' ? '#91973d' : 'transparent',
+                        borderColor: '#91973d',
+                        color: sortOrder === 'desc' ? '#000000' : '#91973d',
+                        '&:hover': {
+                          backgroundColor: sortOrder === 'desc' ? '#a3a94a' : 'rgba(145, 151, 61, 0.1)',
+                          borderColor: '#a3a94a',
+                          color: sortOrder === 'desc' ? '#000000' : '#a3a94a',
+                        },
+                        '& .MuiButton-startIcon': {
+                          margin: { xs: 0, sm: '0 8px 0 -4px' }
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Newest</Box>
+                    </Button>
+                    <Button
+                      variant={sortOrder === 'asc' ? 'contained' : 'outlined'}
+                      size="small"
+                      onClick={() => {
+                        console.log('Setting sort order to asc');
+                        setSortOrder('asc');
+                      }}
+                      startIcon={<ArrowUpwardIcon />}
+                      sx={{
+                        minWidth: { xs: '40px', sm: 'auto' },
+                        backgroundColor: sortOrder === 'asc' ? '#91973d' : 'transparent',
+                        borderColor: '#91973d',
+                        color: sortOrder === 'asc' ? '#000000' : '#91973d',
+                        '&:hover': {
+                          backgroundColor: sortOrder === 'asc' ? '#a3a94a' : 'rgba(145, 151, 61, 0.1)',
+                          borderColor: '#a3a94a',
+                          color: sortOrder === 'asc' ? '#000000' : '#a3a94a',
+                        },
+                        '& .MuiButton-startIcon': {
+                          margin: { xs: 0, sm: '0 8px 0 -4px' }
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Oldest</Box>
+                    </Button>
+                  </Box>
+                )}
+                
+                {activeFilter !== 'all' && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setActiveFilter('all')}
+                    sx={{
+                      borderColor: '#91973d',
+                      color: '#91973d',
+                      '&:hover': {
+                        borderColor: '#7a7f35',
+                        backgroundColor: 'rgba(145, 151, 61, 0.1)',
+                      },
+                    }}
+                  >
+                    Show All
+                  </Button>
+                )}
+              </Box>
             </Box>
             
             {activeFilter === 'companies' ? (
@@ -584,6 +701,7 @@ const Dashboard = () => {
                 onUrgencyUpdate={updateApplicationUrgency}
                 onDeleteApplication={deleteApplication}
                 onMergeApplications={mergeApplications}
+                sortOrder={sortOrder}
               />
             ) : filteredApplications.length === 0 ? (
               <Paper sx={{ p: 3, textAlign: 'center', backgroundColor: '#111111', border: '1px solid #333333' }}>
