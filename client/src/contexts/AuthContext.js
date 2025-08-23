@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Configure axios defaults
-axios.defaults.baseURL = 'http://localhost:3000';
+axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 axios.defaults.withCredentials = true;
 
 const AuthContext = createContext();
@@ -292,8 +292,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = () => {
-    console.log("🔐 Initiating Google OAuth login...");
-    window.location.href = 'http://localhost:3000/api/auth/google';
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+    window.location.href = `${apiUrl}/api/auth/google`;
   };
 
   const logout = async () => {

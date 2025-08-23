@@ -1,52 +1,179 @@
+# JobCAT - Job Application Tracker
 
-# JobCAT - Your Email Companion for Job Applications
+JobCAT is an AI-powered job application tracker that analyzes your Gmail emails to automatically categorize and track your job applications.
 
-JobCAT automatically analyzes your Gmail inbox to track job application statuses using AI. The application identifies job-related emails, extracts application status updates, and presents them in an organized dashboard for efficient job search management.
+## 🚀 Features
 
-## Core Functionality
+- **Gmail Integration**: Automatically scans your Gmail for job-related emails
+- **AI Analysis**: Uses OpenAI to analyze email content and extract key information
+- **Smart Categorization**: Automatically categorizes emails by status (received, under review, interview scheduled, etc.)
+- **Company Tracking**: Groups applications by company with duplicate detection
+- **Real-time Sync**: Live feed showing sync progress
+- **Dashboard Analytics**: Visual charts and statistics
+- **Manual Controls**: Update status, urgency, and merge duplicate applications
 
-**Automated Email Analysis**
-- Connects to Gmail via OAuth2 authentication
-- Identifies job application emails using keyword filtering and AI classification
-- Extracts company names, job positions, application status, sentiment, and urgency
-- Categorizes status as received, under review, interview scheduled, interview completed, offer, rejected, or follow-up needed
+## 🏗️ Architecture
 
-**Interactive Dashboard**
-- Real-time statistics showing total applications, urgent emails, and positive updates
-- Visual status distribution charts with color-coded categories
-- Filterable application list by status, sentiment, or urgency
-- Company-grouped view showing all applications organized by employer
-- Manual status editing capabilities for user control
+- **Frontend**: React.js with Material-UI
+- **Backend**: Node.js with Express
+- **Database**: Firebase Firestore
+- **Authentication**: Google OAuth 2.0
+- **AI**: OpenAI GPT for email analysis
+- **Deployment**: Vercel (recommended)
 
-**Data Management**
-- Incremental email synchronization to avoid reprocessing
-- Firebase Firestore database for persistent application tracking
-- Smart deduplication to prevent multiple entries for the same application
-- Historical email tracking with status progression over time
+## 🚀 Quick Deploy to Vercel
 
-## Technical Implementation
+### Prerequisites
+1. Google Cloud Console account
+2. Firebase project
+3. OpenAI API key
+4. Vercel account
 
-**Backend**: Node.js, Express, Gmail API, OpenAI GPT-4o-mini, Firebase Firestore, Passport.js OAuth2
-**Frontend**: React 18, Material-UI, React Router, Axios, Recharts
-**Authentication**: Google OAuth2 with Gmail read/modify permissions
-**AI Processing**: OpenAI API for email classification and data extraction
+### Deploy Steps
 
-## Setup Requirements
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/JobCATGmailScraper.git
+   cd JobCATGmailScraper
+   ```
 
-**Prerequisites**: Node.js v14+, Google Cloud Console account, OpenAI API key, Firebase project
+2. **Deploy Backend**
+   ```bash
+   npm run vercel:deploy
+   ```
 
-**Environment Variables**: Create `.env` file with Google OAuth credentials, session secret, OpenAI API key, and Firebase service account
+3. **Deploy Frontend**
+   ```bash
+   npm run vercel:deploy-client
+   ```
 
-**Configuration**: Enable Gmail API in Google Cloud Console, set OAuth redirect URI to `http://localhost:3000/api/auth/callback/google`, configure Firebase Firestore database
+4. **Configure Environment Variables** (see VERCEL_DEPLOYMENT.md)
 
-**Installation**: Run `npm run install:all` to install dependencies, then `npm run dev:full` to start both backend (port 3000) and frontend (port 3001)
+5. **Update Google OAuth URLs** with your Vercel domains
 
-**Usage**: Navigate to `http://localhost:3001`, authenticate with Google, grant Gmail permissions, click "Sync" to analyze emails
+## 🔧 Environment Variables
 
-## Key API Endpoints
+### Backend (.env)
+```bash
+NODE_ENV=production
+SESSION_SECRET=your-secure-session-secret
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=https://your-api-domain.vercel.app/api/auth/callback/google
+OPENAI_API_KEY=sk-your-openai-api-key
+FRONTEND_URL=https://your-frontend-domain.vercel.app
+FIREBASE_PROJECT_ID=your-firebase-project
+FIREBASE_PRIVATE_KEY="your-firebase-private-key"
+FIREBASE_CLIENT_EMAIL=your-firebase-email
+```
 
-- `POST /api/update-emails` - Incremental email synchronization
-- `GET /api/applications` - Retrieve stored job applications
+### Frontend (client/.env)
+```bash
+REACT_APP_API_URL=https://your-api-domain.vercel.app
+```
+
+## 📁 Project Structure
+
+```
+JobCATGmailScraper/
+├── server.js              # Main API server
+├── auth.js                 # Google OAuth configuration
+├── firebase.js             # Firebase/Firestore functions
+├── gmail.js                # Gmail API integration
+├── vercel.json             # Vercel deployment config
+├── VERCEL_DEPLOYMENT.md    # Detailed deployment guide
+└── client/                 # React frontend
+    ├── src/
+    │   ├── components/     # React components
+    │   ├── contexts/       # React contexts
+    │   └── jobcatlogo.png  # Application logo
+    └── package.json
+```
+
+## 🛠️ Development Setup
+
+1. **Install dependencies**
+   ```bash
+   npm run install:all
+   ```
+
+2. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   cp client/.env.example client/.env
+   # Fill in your actual values
+   ```
+
+3. **Start development servers**
+   ```bash
+   npm run dev:full
+   ```
+
+## 📚 API Documentation
+
+### Authentication Endpoints
+- `GET /api/auth/google` - Initiate Google OAuth
+- `GET /api/auth/callback/google` - OAuth callback
+- `GET /api/auth/status` - Check auth status
+- `POST /api/auth/logout` - Logout
+
+### Application Endpoints
+- `GET /api/applications` - Get user applications
+- `POST /api/update-emails` - Sync with Gmail
+- `GET /api/job-summary` - Get dashboard summary
 - `PUT /api/applications/:id/status` - Update application status
-- `GET /api/job-summary` - Application statistics and metrics
-- `GET /api/auth/google` - Google OAuth authentication 
+- `PUT /api/applications/:id/urgency` - Update application urgency
+- `DELETE /api/applications/:id` - Delete application
+- `POST /api/applications/merge` - Merge applications
+
+### Utility Endpoints
+- `GET /health` - Health check
+- `GET /api/sync-feed` - Server-sent events for live sync
+
+## 🔐 Security Features
+
+- OAuth 2.0 authentication with Google
+- Session-based authentication
+- CORS protection
+- Firebase security rules
+- Environment variable configuration
+- HTTPS enforcement (Vercel)
+
+## 📊 Performance
+
+- Incremental email sync (only new emails)
+- Batch database operations
+- Client-side caching
+- Optimized React rendering
+- Serverless functions (Vercel)
+
+## 🐛 Troubleshooting
+
+See `VERCEL_DEPLOYMENT.md` for detailed troubleshooting guides.
+
+Common issues:
+- **Authentication loops**: Check OAuth callback URLs
+- **CORS errors**: Verify FRONTEND_URL environment variable
+- **Function timeouts**: Consider Vercel Pro for longer execution time
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 📞 Support
+
+- Create an issue for bugs or feature requests
+- Check VERCEL_DEPLOYMENT.md for deployment help
+- Review the code for implementation details
+
+---
+
+**Your AI-powered job application tracker is ready! 🎉**

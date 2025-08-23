@@ -1,5 +1,13 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("./firebaseServiceAccountKey.json");
+
+const serviceAccount = process.env.FIREBASE_PROJECT_ID
+  ? {
+      type: "service_account",
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    }
+  : require("./firebaseServiceAccountKey.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -7,10 +15,8 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// Firebase utility functions
 async function getUserApplications(userId) {
   try {
-    console.log(`📊 Fetching applications for user: ${userId}`);
     const applicationsRef = db.collection('users').doc(userId).collection('applications');
     const snapshot = await applicationsRef.get();
     
@@ -22,7 +28,6 @@ async function getUserApplications(userId) {
       });
     });
     
-    console.log(`✅ Found ${applications.length} applications for user ${userId}`);
     return applications;
   } catch (error) {
     console.error(`❌ Error fetching applications for user ${userId}:`, error);
@@ -32,16 +37,13 @@ async function getUserApplications(userId) {
 
 async function getLastScrapeTime(userId) {
   try {
-    console.log(`📅 Fetching last scrape time for user: ${userId}`);
     const metaRef = db.collection('users').doc(userId).collection('meta').doc('lastScrape');
     const doc = await metaRef.get();
     
     if (doc.exists) {
       const data = doc.data();
-      console.log(`✅ Last scrape time: ${data.timestamp}`);
       return data.timestamp;
     } else {
-      console.log(`📅 No previous scrape found for user ${userId}`);
       return null;
     }
   } catch (error) {
@@ -52,13 +54,11 @@ async function getLastScrapeTime(userId) {
 
 async function updateLastScrapeTime(userId) {
   try {
-    console.log(`📅 Updating last scrape time for user: ${userId}`);
     const metaRef = db.collection('users').doc(userId).collection('meta').doc('lastScrape');
     await metaRef.set({
       timestamp: new Date().toISOString(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    console.log(`✅ Last scrape time updated for user ${userId}`);
   } catch (error) {
     console.error(`❌ Error updating last scrape time for user ${userId}:`, error);
     throw error;
@@ -105,8 +105,6 @@ function generateApplicationId(company, position) {
 
 async function storeApplications(userId, applications) {
   try {
-    console.log(`💾 Storing ${applications.length} applications for user: ${userId}`);
-    
     const batch = db.batch();
     let storedCount = 0;
     let skippedCount = 0;
@@ -114,22 +112,16 @@ async function storeApplications(userId, applications) {
     
     for (const application of applications) {
       try {
-        // Use company+position as the key for deduplication
         const applicationId = generateApplicationId(application.aiAnalysis.company, application.aiAnalysis.position);
         const applicationRef = db.collection('users').doc(userId).collection('applications').doc(applicationId);
         
-        // Check if application already exists
         const existingDoc = await applicationRef.get();
         if (existingDoc.exists) {
           const existingData = existingDoc.data();
-          
-          // Only update if this is a newer email and status has progressed
           const existingDate = new Date(existingData.date);
           const newDate = new Date(application.date);
           
           if (newDate > existingDate && !existingData.manuallyUpdated) {
-            console.log(`🔄 Updating existing application: ${applicationId} with newer status`);
-            
             const updatedData = {
               ...existingData,
               status: application.aiAnalysis.status,
@@ -140,7 +132,6 @@ async function storeApplications(userId, applications) {
               lastEmailSubject: application.subject,
               lastEmailFrom: application.from,
               lastGmailId: application.gmailId,
-              // Update with latest email content
               body: application.body,
               htmlContent: application.htmlContent,
               preview: application.preview,
@@ -160,23 +151,19 @@ async function storeApplications(userId, applications) {
             batch.update(applicationRef, updatedData);
             updatedCount++;
           } else {
-            console.log(`⏭️ Application ${applicationId} already exists with newer/manual data, skipping`);
             skippedCount++;
             continue;
           }
         } else {
-          // New application
-          console.log(`✅ Storing new application: ${applicationId}`);
-          
           const applicationData = {
-            id: applicationId, // Add the generated ID
+            id: applicationId,
             gmailId: application.gmailId,
             subject: application.subject,
             from: application.from,
             date: application.date,
-            body: application.body, // Clean text content
-            htmlContent: application.htmlContent, // Original HTML content
-            preview: application.preview, // Short preview text
+            body: application.body,
+            htmlContent: application.htmlContent,
+            preview: application.preview,
             company: application.aiAnalysis.company,
             position: application.aiAnalysis.position,
             status: application.aiAnalysis.status,
@@ -206,14 +193,10 @@ async function storeApplications(userId, applications) {
         }
       } catch (error) {
         console.error(`❌ Error preparing application ${application.gmailId}:`, error);
-        // Continue with other applications
       }
     }
     
-    // Commit the batch
     await batch.commit();
-    console.log(`✅ Batch write completed: ${storedCount} new, ${updatedCount} updated, ${skippedCount} skipped`);
-    
     return { storedCount, updatedCount, skippedCount };
   } catch (error) {
     console.error(`❌ Error storing applications for user ${userId}:`, error);
@@ -223,10 +206,8 @@ async function storeApplications(userId, applications) {
 
 async function updateApplicationStatus(userId, applicationId, newStatus) {
   try {
-    console.log(`🔄 Updating application ${applicationId} status to ${newStatus} for user: ${userId}`);
     const applicationRef = db.collection('users').doc(userId).collection('applications').doc(applicationId);
     
-    // Check if application exists
     const doc = await applicationRef.get();
     if (!doc.exists) {
       throw new Error(`Application ${applicationId} not found`);
@@ -238,7 +219,6 @@ async function updateApplicationStatus(userId, applicationId, newStatus) {
       manuallyUpdated: true
     });
     
-    console.log(`✅ Application ${applicationId} status updated to ${newStatus}`);
     return true;
   } catch (error) {
     console.error(`❌ Error updating application status for ${applicationId}:`, error);
@@ -248,10 +228,8 @@ async function updateApplicationStatus(userId, applicationId, newStatus) {
 
 async function updateApplicationUrgency(userId, applicationId, newUrgency) {
   try {
-    console.log(`🔄 Updating application ${applicationId} urgency to ${newUrgency} for user: ${userId}`);
     const applicationRef = db.collection('users').doc(userId).collection('applications').doc(applicationId);
     
-    // Check if application exists
     const doc = await applicationRef.get();
     if (!doc.exists) {
       throw new Error(`Application ${applicationId} not found`);
@@ -263,7 +241,6 @@ async function updateApplicationUrgency(userId, applicationId, newUrgency) {
       manuallyUpdated: true
     });
     
-    console.log(`✅ Application ${applicationId} urgency updated to ${newUrgency}`);
     return true;
   } catch (error) {
     console.error(`❌ Error updating application urgency for ${applicationId}:`, error);
@@ -273,19 +250,14 @@ async function updateApplicationUrgency(userId, applicationId, newUrgency) {
 
 async function deleteApplication(userId, applicationId) {
   try {
-    console.log(`🗑️ Deleting application ${applicationId} for user: ${userId}`);
     const applicationRef = db.collection('users').doc(userId).collection('applications').doc(applicationId);
     
-    // Check if application exists
     const doc = await applicationRef.get();
     if (!doc.exists) {
       throw new Error(`Application ${applicationId} not found`);
     }
     
-    // Delete the application document
     await applicationRef.delete();
-    
-    console.log(`✅ Application ${applicationId} deleted successfully`);
     return true;
   } catch (error) {
     console.error(`❌ Error deleting application ${applicationId}:`, error);

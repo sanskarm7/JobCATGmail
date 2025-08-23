@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import jobcatLogo from '../jobcatlogo.png';
 import {
   Box,
   Button,
@@ -53,9 +54,17 @@ const Login = () => {
               borderBottom: '1px solid #333333',
             }}
           >
-            <Typography variant="h3" component="h1" gutterBottom>
-              JobCAT
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <img 
+                src={jobcatLogo} 
+                alt="JobCAT" 
+                style={{ 
+                  height: '80px', 
+                  width: 'auto',
+                  objectFit: 'contain'
+                }} 
+              />
+            </Box>
             <Typography variant="h6" sx={{ opacity: 0.9 }}>
               Your Email Companion for Job Applications
             </Typography>

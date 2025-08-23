@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import jobcatLogo from '../jobcatlogo.png';
 import CompanyView from './CompanyView';
 import {
   Box,
@@ -296,7 +297,8 @@ const Dashboard = () => {
   };
 
   const handleReauthenticate = () => {
-    window.location.href = 'http://localhost:3000/api/auth/google';
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+    window.location.href = `${apiUrl}/api/auth/google`;
   };
 
   const handleLogout = () => {
@@ -338,9 +340,17 @@ const Dashboard = () => {
                 borderBottom: '1px solid #333333',
               }}
             >
-              <Typography variant="h4" component="h1" gutterBottom>
-                JobCAT
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <img 
+                  src={jobcatLogo} 
+                  alt="JobCAT" 
+                  style={{ 
+                    height: '60px', 
+                    width: 'auto',
+                    objectFit: 'contain'
+                  }} 
+                />
+              </Box>
               <Typography variant="h6" sx={{ opacity: 0.9 }}>
                 Job Collector and Tracker
               </Typography>
@@ -388,9 +398,17 @@ const Dashboard = () => {
     <Box sx={{ minHeight: '100vh', backgroundColor: '#000000' }}>
       <AppBar position="static" elevation={0}>
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            JobCAT
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+            <img 
+              src={jobcatLogo} 
+              alt="JobCAT" 
+              style={{ 
+                height: '40px', 
+                width: 'auto',
+                objectFit: 'contain'
+              }} 
+            />
+          </Box>
           <Button
             color="inherit"
             startIcon={<UpdateIcon />}
@@ -644,6 +662,17 @@ const Dashboard = () => {
 
         {!summary && (
           <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+              <img 
+                src={jobcatLogo} 
+                alt="JobCAT" 
+                style={{ 
+                  height: '80px', 
+                  width: 'auto',
+                  objectFit: 'contain'
+                }} 
+              />
+            </Box>
             <Typography variant="h4" gutterBottom sx={{ color: '#91973d' }}>
               Welcome to JobCAT
             </Typography>

@@ -1,0 +1,6 @@
+client/
+*.md
+.git/
+node_modules/
+.env*
+firebaseServiceAccountKey.json

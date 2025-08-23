@@ -5,12 +5,18 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
+    "start": "NODE_ENV=production node server.js",
     "dev": "nodemon server.js",
     "client": "cd client && npm start",
     "client:build": "cd client && npm run build",
     "dev:full": "concurrently \"npm run dev\" \"npm run client\"",
-    "install:all": "npm install && cd client && npm install"
+    "install:all": "npm install && cd client && npm install",
+    "build": "npm run client:build",
+    "prod:install": "npm install --production && cd client && npm install",
+    "prod:start": "npm run build && npm start",
+    "health": "curl -f http://localhost:${PORT:-3000}/health || exit 1",
+    "vercel:deploy": "vercel --prod",
+    "vercel:deploy-client": "cd client && vercel --prod"
   },
   "repository": {
     "type": "git",
