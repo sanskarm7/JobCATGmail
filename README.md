@@ -1,4 +1,4 @@
-# JobCAT - Job Application Tracker
+# JobCAT
 
 JobCAT is an AI-powered job application tracker that analyzes your Gmail emails to automatically categorize and track your job applications.
 
