@@ -3,10 +3,10 @@
 ## ✅ Your Live Applications
 
 ### **Frontend (React App)**
-🌐 **URL:** https://jobcatfrontend-lqf43dc0y-sanskars-projects-6d91a48a.vercel.app
+🌐 **URL:** https://jobcatfrontend-ojeqtw4c4-sanskars-projects-6d91a48a.vercel.app
 
 ### **Backend (API Server)**  
-🔧 **URL:** https://jobcatapi-e9k6h9vio-sanskars-projects-6d91a48a.vercel.app
+🔧 **URL:** https://jobcatapi-c7o564bdg-sanskars-projects-6d91a48a.vercel.app
 
 ---
 
@@ -20,12 +20,12 @@
 
 ### Authorized JavaScript Origins:
 ```
-https://jobcatfrontend-lqf43dc0y-sanskars-projects-6d91a48a.vercel.app
+https://jobcatfrontend-ojeqtw4c4-sanskars-projects-6d91a48a.vercel.app
 ```
 
 ### Authorized Redirect URIs:
 ```
-https://jobcatapi-e9k6h9vio-sanskars-projects-6d91a48a.vercel.app/api/auth/callback/google
+https://jobcatapi-c7o564bdg-sanskars-projects-6d91a48a.vercel.app/api/auth/callback/google
 ```
 
 ---
@@ -34,14 +34,14 @@ https://jobcatapi-e9k6h9vio-sanskars-projects-6d91a48a.vercel.app/api/auth/callb
 
 ### 1. Test Backend Health:
 ```bash
-curl https://jobcatapi-e9k6h9vio-sanskars-projects-6d91a48a.vercel.app/health
+curl https://jobcatapi-c7o564bdg-sanskars-projects-6d91a48a.vercel.app/health
 ```
 
 ### 2. Test OAuth Redirect:
-Visit: https://jobcatapi-e9k6h9vio-sanskars-projects-6d91a48a.vercel.app/api/auth/google
+Visit: https://jobcatapi-c7o564bdg-sanskars-projects-6d91a48a.vercel.app/api/auth/google
 
 ### 3. Test Full Application:
-Visit: https://jobcatfrontend-lqf43dc0y-sanskars-projects-6d91a48a.vercel.app
+Visit: https://jobcatfrontend-ojeqtw4c4-sanskars-projects-6d91a48a.vercel.app
 
 ---
 
@@ -76,7 +76,7 @@ Visit: https://jobcatfrontend-lqf43dc0y-sanskars-projects-6d91a48a.vercel.app
 vercel ls
 
 # View logs
-vercel logs https://jobcatapi-e9k6h9vio-sanskars-projects-6d91a48a.vercel.app
+vercel logs https://jobcatapi-c7o564bdg-sanskars-projects-6d91a48a.vercel.app
 
 # Check environment variables
 vercel env ls

@@ -5,6 +5,27 @@ import axios from 'axios';
 axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 axios.defaults.withCredentials = true;
 
+// JWT token management
+const getStoredToken = () => {
+  return localStorage.getItem('authToken');
+};
+
+const setStoredToken = (token) => {
+  if (token) {
+    localStorage.setItem('authToken', token);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    localStorage.removeItem('authToken');
+    delete axios.defaults.headers.common['Authorization'];
+  }
+};
+
+// Set initial token if it exists
+const existingToken = getStoredToken();
+if (existingToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
+}
+
 const AuthContext = createContext();
 
 export const useAuth = () => {
@@ -25,6 +46,17 @@ export const AuthProvider = ({ children }) => {
 
   // Check authentication status on mount
   useEffect(() => {
+    // Check for token in URL parameters (from OAuth callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    
+    if (tokenFromUrl) {
+      console.log("🔑 Token found in URL, storing it...");
+      setStoredToken(tokenFromUrl);
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
     checkAuthStatus();
   }, []);
 
@@ -302,6 +334,9 @@ export const AuthProvider = ({ children }) => {
       await axios.post('/api/auth/logout');
       console.log("✅ Logout successful");
       
+      // Clear stored token
+      setStoredToken(null);
+      
       setIsAuthenticated(false);
       setUser(null);
       setApplications([]);
@@ -309,6 +344,13 @@ export const AuthProvider = ({ children }) => {
       setError(null);
     } catch (error) {
       console.error("❌ Error during logout:", error);
+      // Clear token even if logout request fails
+      setStoredToken(null);
+      setIsAuthenticated(false);
+      setUser(null);
+      setApplications([]);
+      setSummary(null);
+      setError(null);
     }
   };
 

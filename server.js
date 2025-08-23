@@ -18,6 +18,7 @@ if (process.env.VERCEL) {
 const express = require("express");
 const session = require("express-session");
 const passport = require("./auth");
+const jwt = require("jsonwebtoken");
 const { fetchIncrementalJobEmails } = require("./gmail");
 const { 
   getUserApplications, 
@@ -31,8 +32,66 @@ const {
   generateSummaryFromDB 
 } = require("./firebase");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 
 const activeSyncSessions = new Map();
+
+// JWT Helper functions
+const generateJWT = (user) => {
+  const payload = {
+    id: user.id,
+    email: user.emails?.[0]?.value,
+    name: user.displayName,
+    photo: user.photos?.[0]?.value,
+    accessToken: user.accessToken,
+    refreshToken: user.refreshToken
+  };
+  
+  return jwt.sign(payload, process.env.SESSION_SECRET, { 
+    expiresIn: '24h',
+    issuer: 'jobcat-api',
+    audience: 'jobcat-frontend'
+  });
+};
+
+const verifyJWT = (token) => {
+  try {
+    return jwt.verify(token, process.env.SESSION_SECRET, {
+      issuer: 'jobcat-api',
+      audience: 'jobcat-frontend'
+    });
+  } catch (error) {
+    console.error("❌ JWT verification failed:", error.message);
+    return null;
+  }
+};
+
+// JWT Authentication middleware
+const authenticateJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  
+  // Also check for token in cookies as fallback
+  const cookieToken = req.cookies?.authToken;
+  const finalToken = token || cookieToken;
+  
+  if (!finalToken) {
+    console.log("🔍 No JWT token found in request");
+    return next(); // Continue without authentication
+  }
+  
+  const user = verifyJWT(finalToken);
+  if (user) {
+    console.log("✅ JWT verified for user:", user.id);
+    req.user = user;
+    req.isAuthenticated = () => true;
+  } else {
+    console.log("❌ JWT verification failed");
+    req.isAuthenticated = () => false;
+  }
+  
+  next();
+};
 
 function streamLog(userId, level, message, data = null) {
   const logEntry = {
@@ -74,6 +133,7 @@ function createSyncLogger(userId) {
 const app = express();
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? [process.env.FRONTEND_URL]
@@ -81,24 +141,95 @@ app.use(cors({
   credentials: true
 }));
 app.use(
-  session({ secret: process.env.SESSION_SECRET, resave: false, saveUninitialized: false })
+  session({ 
+    secret: process.env.SESSION_SECRET, 
+    resave: false, 
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    }
+  })
 );
 app.use(passport.initialize());
 app.use(passport.session());
+// Add JWT authentication middleware for all routes
+app.use(authenticateJWT);
 
 app.get("/api/auth/google", passport.authenticate("google"));
 
+app.get("/api/auth/status", (req, res) => {
+  console.log("🔍 Auth status check - isAuthenticated:", req.isAuthenticated());
+  console.log("🔍 Session ID:", req.sessionID);
+  console.log("🔍 User:", req.user ? req.user.id : "No user");
+  
+  if (req.isAuthenticated()) {
+    res.json({
+      authenticated: true,
+      user: {
+        id: req.user.id,
+        email: req.user.emails?.[0]?.value,
+        name: req.user.displayName,
+        photo: req.user.photos?.[0]?.value
+      }
+    });
+  } else {
+    res.json({
+      authenticated: false,
+      user: null
+    });
+  }
+});
+
 app.get("/api/auth/callback/google", passport.authenticate("google", { failureRedirect: "/" }), async (req, res) => {
   try {
+    console.log("✅ OAuth callback successful!");
+    console.log("User authenticated:", req.user ? req.user.id : "No user");
+    
+    // Generate JWT token
+    const token = generateJWT(req.user);
+    console.log("🔑 JWT token generated for user:", req.user.id);
+    
+    // Set JWT token as httpOnly cookie
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : 'localhost'
+    });
+    
+    console.log("🍪 Auth token cookie set");
+    
     res.redirect(process.env.NODE_ENV === 'production' 
-      ? `${process.env.FRONTEND_URL}/dashboard`
-      : 'http://localhost:3001/dashboard');
+      ? `${process.env.FRONTEND_URL}/dashboard?token=${token}`
+      : `http://localhost:3001/dashboard?token=${token}`);
   } catch (error) {
     console.error("❌ OAuth callback error:", error);
     res.redirect(process.env.NODE_ENV === 'production'
       ? `${process.env.FRONTEND_URL}/login?error=auth_failed`
       : 'http://localhost:3001/login?error=auth_failed');
   }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  console.log("🚪 Logout request received");
+  
+  // Clear JWT cookie
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : 'localhost'
+  });
+  
+  // Also clear session cookie for good measure
+  res.clearCookie('connect.sid');
+  
+  console.log("✅ Logout successful - JWT cookie cleared");
+  res.json({ success: true });
 });
 
 app.get("/api/applications", async (req, res) => {
